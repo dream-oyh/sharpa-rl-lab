@@ -137,36 +137,26 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_thumb_elastomer",
             history_length=3,
-            track_contact_points=True,
-            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_index_elastomer",
             history_length=3,
-            track_contact_points=True,
-            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_middle_elastomer",
             history_length=3,
-            track_contact_points=True,
-            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_ring_elastomer",
             history_length=3,
-            track_contact_points=True,
-            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_pinky_elastomer",
             history_length=3,
-            track_contact_points=True,
-            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         # DP
