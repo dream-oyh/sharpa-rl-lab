@@ -54,13 +54,18 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
         success = self.episode_length_buf == self.max_episode_length - 1
         all_states = torch.cat([self.hand_dof_pos, self.object_pos, self.object_rot], dim=1)[success]
         saved_scale_ids = self.scale_ids[success]
+        max_cache_size = int(getattr(self.cfg, "grasp_cache_size", 50000))
+        max_cache_per_scale = max_cache_size // self.cfg.scale_range[2]
         sum_total = 0
         finish_scale = 0
         for id, saved_scale_id in enumerate(saved_scale_ids):
-            if self.saved_grasping_states[saved_scale_id].shape[0] < 5e4//self.cfg.scale_range[2]:
-                self.saved_grasping_states[saved_scale_id] = torch.cat([self.saved_grasping_states[saved_scale_id], all_states[id].reshape(-1, 29)], dim=0)
+            if self.saved_grasping_states[saved_scale_id].shape[0] < max_cache_per_scale:
+                self.saved_grasping_states[saved_scale_id] = torch.cat(
+                    [self.saved_grasping_states[saved_scale_id], all_states[id].reshape(-1, 29)],
+                    dim=0,
+                )[:max_cache_per_scale]
         for id, saved_grasping_states in enumerate(self.saved_grasping_states):
-            if saved_grasping_states.shape[0] >= 5e4//self.cfg.scale_range[2]:
+            if saved_grasping_states.shape[0] >= max_cache_per_scale:
                 finish_scale += 1
             sum_total += saved_grasping_states.shape[0]
         print(f'[{time.strftime("%Y-%m-%d %H:%M:%S")}] current cache size: {sum_total}, finished: {finish_scale}')
@@ -70,7 +75,8 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
             for saved_grasping_states in self.saved_grasping_states:
                 save_data = torch.cat([save_data, saved_grasping_states], dim=0)
             os.makedirs('cache', exist_ok=True)
-            name = f'cache/sharpa_grasp_linspace_{self.cfg.scale_range[0]}-{self.cfg.scale_range[1]}-{self.cfg.scale_range[2]}.npy'
+            cache_prefix = getattr(self.cfg, "save_grasp_cache_path", None) or self.cfg.grasp_cache_path or 'cache/sharpa_grasp_linspace'
+            name = f'{cache_prefix}_{self.cfg.scale_range[0]}-{self.cfg.scale_range[1]}-{self.cfg.scale_range[2]}.npy'
             np.save(name, save_data.cpu().numpy())
             exit()
 

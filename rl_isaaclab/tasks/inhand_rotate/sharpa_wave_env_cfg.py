@@ -264,6 +264,8 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     torque_penalty_scale = -0.1
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
+    object_axis_align_axis = (0, 0, 1)
+    object_axis_align_penalty_scale = 0.0
     # grasp cache
     grasp_cache_path = 'cache/sharpa_grasp_linspace' # Grasp cache used in training.
     # noise
@@ -309,3 +311,8 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     gravity_curriculum = True # If True, gravity is gradually increased during training, upper limits is 10m/s^2.
     # debug
     debug_show_axes = False   # If True, visualize the coordinate axes of the object.
+    debug_show_object_pos = False
+    vis_object_pos_radius = 0.008
+    vis_object_pos_color = (1.0, 0.0, 1.0)
+    dome_light_intensity = 8000.0
+    dome_light_color = (1.0, 1.0, 1.0)

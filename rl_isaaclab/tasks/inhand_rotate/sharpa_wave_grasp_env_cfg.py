@@ -253,6 +253,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     rot_axis = (0, 0, 1)
     # grasp cache
     grasp_cache_path = None
+    grasp_cache_size = 50000
     # noise
     joint_noise_scale = 0.02
     # contact
@@ -293,3 +294,6 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     force_decay_interval = 0.08
     # curriculum
     gravity_curriculum = False
+    # debug
+    dome_light_intensity = 8000.0
+    dome_light_color = (1.0, 1.0, 1.0)
