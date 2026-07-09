@@ -264,6 +264,9 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     torque_penalty_scale = -0.1
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
+    object_z_penalty_scale = 0.0
+    object_tip_local_pos = (0, 0, 0.05)
+    object_tip_z_penalty_scale = 0.0
     object_axis_align_axis = (0, 0, 1)
     object_axis_align_penalty_scale = 0.0
     # grasp cache

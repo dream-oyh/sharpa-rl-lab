@@ -40,7 +40,7 @@ class SharpaWaveBulbGraspEnvCfg(SharpaWaveEnvCfg):
                 contact_offset=0.002,
                 rest_offset=0.0,
             ),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.04),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.065),
             scale=bulb_asset_scale,
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
@@ -56,12 +56,12 @@ class SharpaWaveBulbGraspEnvCfg(SharpaWaveEnvCfg):
 
     reset_height_lower = 0.63406
     reset_height_upper = 0.64406
-    reset_angle_diff = 20 / 180 * math.pi
+    reset_angle_diff = 10 / 180 * math.pi
     debug_show_object_pos = True
     rot_axis = (0, 0, 1)
     grasp_cache_path = None
-    save_grasp_cache_path = "cache/sharpa_bulb_grasp_high_1p0"
+    save_grasp_cache_path = "cache/sharpa_bulb_grasp_high_1p0_angle10"
     grasp_cache_size = 30000
-    object_base_friction = 0.4
-    randomize_mass_lower = 0.02
-    randomize_mass_upper = 0.08
+    object_base_friction = 0.5
+    randomize_mass_lower = 0.065 / 1.2
+    randomize_mass_upper = 0.065 * 1.2

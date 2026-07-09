@@ -40,7 +40,7 @@ class SharpaWaveBulbEnvCfg(SharpaWaveEnvCfg):
                 contact_offset=0.002,
                 rest_offset=0.0,
             ),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.04),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.065),
             scale=bulb_asset_scale,
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
@@ -55,15 +55,18 @@ class SharpaWaveBulbEnvCfg(SharpaWaveEnvCfg):
     events.rand_params(scale_range)
 
     grasp_cache_path = "cache/sharpa_bulb_grasp_high_1p0"
-    object_base_friction = 0.4
-    randomize_mass_lower = 0.02
-    randomize_mass_upper = 0.08
+    object_base_friction = 0.5
+    randomize_mass_lower = 0.065 / 1.2
+    randomize_mass_upper = 0.065 * 1.2
     randomize_com_lower = -0.003
     randomize_com_upper = 0.003
     rot_axis = (0, 0, 1)
+    object_z_penalty_scale = 0.0
+    object_tip_local_pos = (0, 0, 0.05)
+    object_tip_z_penalty_scale = -1.0
     object_axis_align_axis = (0, 0, 1)
     object_axis_align_penalty_scale = 0.0
     reset_height_lower = 0.61906
     reset_height_upper = 0.65906
-    reset_angle_diff = 20 / 180 * math.pi
+    reset_angle_diff = 10 / 180 * math.pi
     debug_show_object_pos = True

@@ -241,6 +241,13 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         torque_penalty = (self.hand_dof_torque[:, self.actuated_dof_indices] ** 2).sum(-1)
         work_penalty = ((self.hand_dof_torque[:, self.actuated_dof_indices] * self.hand_dof_vel[:, self.actuated_dof_indices]).sum(-1)) ** 2
         object_pos_diff = 1.0 / (torch.norm(self.object_pos - self.object_default_pose.clone()[:, :3], dim=-1) + 0.001)
+        object_z_diff = torch.abs(self.object_pos[:, 2] - self.object_default_pose[:, 2])
+        object_z_penalty = object_z_diff * object_z_diff
+        object_tip_local_pos = torch.tensor(self.cfg.object_tip_local_pos, device=self.device, dtype=torch.float32).repeat(self.num_envs, 1)
+        object_tip_pos = self.object_pos + quat_rotate(self.object_rot, object_tip_local_pos)
+        default_object_tip_pos = self.object_default_pose[:, :3] + quat_rotate(self.object_default_pose[:, 3:7], object_tip_local_pos)
+        object_tip_z_diff = torch.abs(object_tip_pos[:, 2] - default_object_tip_pos[:, 2])
+        object_tip_z_penalty = object_tip_z_diff * object_tip_z_diff
         object_axis = torch.tensor(self.cfg.object_axis_align_axis, device=self.device, dtype=torch.float32).repeat(self.num_envs, 1)
         object_axis = object_axis / torch.clamp(torch.norm(object_axis, dim=-1, keepdim=True), min=1.0e-6)
         object_axis_w = quat_rotate(self.object_rot, object_axis)
@@ -256,6 +263,8 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             torque_penalty, self.cfg.torque_penalty_scale,
             work_penalty, self.cfg.work_penalty_scale,
             object_pos_diff, self.cfg.object_pos_reward_scale,
+            object_z_penalty, self.cfg.object_z_penalty_scale,
+            object_tip_z_penalty, self.cfg.object_tip_z_penalty_scale,
             object_axis_align_penalty, self.cfg.object_axis_align_penalty_scale,
         )
 
@@ -265,6 +274,10 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.extras["torque_penalty"] = torque_penalty.mean()
         self.extras["work_penalty"] = work_penalty.mean()
         self.extras['object_pos_diff'] = object_pos_diff.mean()
+        self.extras['object_z_diff'] = object_z_diff.mean()
+        self.extras['object_z_penalty'] = object_z_penalty.mean()
+        self.extras['object_tip_z_diff'] = object_tip_z_diff.mean()
+        self.extras['object_tip_z_penalty'] = object_tip_z_penalty.mean()
         self.extras['object_axis_align_angle'] = object_axis_align_angle.mean()
         self.extras['object_axis_align_penalty'] = object_axis_align_penalty.mean()
         self.extras['roll'] = object_angvel[:, 0].mean()
@@ -519,6 +532,8 @@ def compute_rewards(
     torque_penalty: torch.Tensor, torque_penalty_scale: float,
     work_penalty: torch.Tensor, work_penalty_scale: float,
     object_pos_diff: torch.Tensor, object_pos_reward_scale: float,
+    object_z_penalty: torch.Tensor, object_z_penalty_scale: float,
+    object_tip_z_penalty: torch.Tensor, object_tip_z_penalty_scale: float,
     object_axis_align_penalty: torch.Tensor, object_axis_align_penalty_scale: float,
 ):
     reward = rotate_reward * rotate_reward_scale
@@ -527,6 +542,8 @@ def compute_rewards(
     reward += torque_penalty * torque_penalty_scale
     reward += work_penalty * work_penalty_scale
     reward += object_pos_diff * object_pos_reward_scale
+    reward += object_z_penalty * object_z_penalty_scale
+    reward += object_tip_z_penalty * object_tip_z_penalty_scale
     reward += object_axis_align_penalty * object_axis_align_penalty_scale
     return reward
 

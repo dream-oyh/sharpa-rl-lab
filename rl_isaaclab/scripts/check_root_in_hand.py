@@ -121,6 +121,8 @@ def _print_reward_terms(raw_env):
         ("torque_penalty", "torque_penalty_scale"),
         ("work_penalty", "work_penalty_scale"),
         ("object_pos_diff", "object_pos_reward_scale"),
+        ("object_z_penalty", "object_z_penalty_scale"),
+        ("object_tip_z_penalty", "object_tip_z_penalty_scale"),
         ("object_axis_align_penalty", "object_axis_align_penalty_scale"),
     ]
     print("reward term contributions:")
@@ -135,6 +137,10 @@ def _print_reward_terms(raw_env):
         print(f"  {term_name}: raw={raw: .6f}, scale={scale: .6f}, weighted={weighted: .6f}")
     if "object_axis_align_angle" in extras:
         print(f"  object_axis_align_angle: raw={_to_float(extras['object_axis_align_angle']): .6f} rad")
+    if "object_z_diff" in extras:
+        print(f"  object_z_diff: raw={_to_float(extras['object_z_diff']): .6f} m")
+    if "object_tip_z_diff" in extras:
+        print(f"  object_tip_z_diff: raw={_to_float(extras['object_tip_z_diff']): .6f} m")
     if "total_reward" in extras:
         print(f"  total_reward extras: {_to_float(extras['total_reward']): .6f}")
     print(f"  weighted sum from listed terms: {weighted_sum: .6f}")

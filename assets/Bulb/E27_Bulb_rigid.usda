@@ -11,7 +11,7 @@ def Xform "E27_Bulb" (
 {
     bool physics:kinematicEnabled = 0
     bool physics:rigidBodyEnabled = 1
-    float physics:mass = 0.04
+    float physics:mass = 0.065
 
     def Xform "visual" (
         prepend references = @./E27_Bulb.usdz@
