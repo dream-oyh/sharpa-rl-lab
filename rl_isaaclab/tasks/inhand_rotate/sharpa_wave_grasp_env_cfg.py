@@ -134,26 +134,36 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_thumb_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_index_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_middle_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_ring_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_pinky_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         # DP
@@ -259,7 +269,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     # contact
     enable_tactile = True
     binary_contact = False
-    enable_contact_pos = False
+    enable_contact_pos = True
     disable_tactile_ids = []
     contact_smooth = 0.5
     contact_threshold = 0.05

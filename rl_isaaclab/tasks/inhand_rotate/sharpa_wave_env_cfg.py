@@ -137,26 +137,36 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_thumb_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_index_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_middle_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_ring_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_pinky_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         # DP
@@ -276,7 +286,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     # contact
     enable_tactile = True       # If True, the tactile sensor is enabled.
     binary_contact = False      # If True, the output tactile force will be binarized according to the contact_threshold.
-    enable_contact_pos = False  # Not tested yet. If True, the tactile sensor will output the contact position.
+    enable_contact_pos = True   # If True, the tactile sensor outputs contact positions in each elastomer frame.
     disable_tactile_ids = []    # Set 0 to according tactile ids.
                                 # 0, 1, 2, 3, 4 are thumb, index, middle, ring, pinky finger, respectively.
     contact_smooth = 0.5        # Smoothing factor for tactile force.

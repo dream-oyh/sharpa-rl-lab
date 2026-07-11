@@ -212,7 +212,10 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             prob = self.cfg.random_force_prob_scalar
             force_indices = (torch.less(torch.rand(self.num_envs, device=self.device), prob)).nonzero().to(self.device)
             self.rb_forces[force_indices, :] = torch.randn(self.rb_forces[force_indices, :].shape, device=self.device) * obj_mass[force_indices, None] * self.cfg.force_scale
-            self.object.set_external_force_and_torque(forces=self.rb_forces.reshape(self.num_envs, 1, 3), torques=torch.zeros(self.num_envs, 1, 3))
+            self.object.set_external_force_and_torque(
+                forces=self.rb_forces.reshape(self.num_envs, 1, 3),
+                torques=torch.zeros((self.num_envs, 1, 3), device=self.device),
+            )
 
     def _apply_action(self) -> None:
         self._refresh_lab()
@@ -452,12 +455,20 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
 
         # contact pos
         contact_pos = torch.zeros((self.num_envs, len(self._contact_body_ids), 3), dtype=torch.float32, device=self.device)
-        if self.cfg.enable_contact_pos and hasattr(self._contact_sensor[0].data, "contact_pos_w"):
-            not_contact_mask = sensed_contacts < 1.0e-6
+        if self.cfg.enable_contact_pos:
+            contact_pos_w = [getattr(self._contact_sensor[id].data, "contact_pos_w", None) for id in self._contact_body_ids]
+            if any(pos is None for pos in contact_pos_w):
+                raise RuntimeError(
+                    "Contact positions are enabled, but at least one tactile contact sensor does not provide "
+                    "'contact_pos_w'. Use Isaac Lab 2.3+ and set track_contact_points=True."
+                )
+
+            contact_pos = torch.cat([pos[:, 0, 0, :].unsqueeze(1) for pos in contact_pos_w], dim=1)
+            valid_contact_pos_mask = torch.isfinite(contact_pos).all(dim=-1)
+            not_contact_mask = (sensed_contacts < 1.0e-6) | ~valid_contact_pos_mask
             not_contact_mask[:, self._contact_body_ids_disable] = True
             contact_mask = ~not_contact_mask
 
-            contact_pos = torch.cat([self._contact_sensor[id].data.contact_pos_w[:, 0, 0, :].unsqueeze(1) for id in self._contact_body_ids], dim=1)
             contact_pos = torch.nan_to_num(contact_pos, nan=0.0)
             contact_pos[contact_mask, :] = transform_between_frames(contact_pos[contact_mask, :] - tactile_frame_pos[contact_mask, :], world_quat[contact_mask, :], tactile_frame_quat[contact_mask, :])
             contact_pos[not_contact_mask, :] = 0.0
