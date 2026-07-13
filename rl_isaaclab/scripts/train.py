@@ -73,6 +73,7 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     agent_cfg["algorithm"]['minibatch_size'] = min([args_cli.num_envs * 8, 32768])
     if agent_cfg["algo"] == "ProprioAdapt":
         env_cfg.gravity_curriculum = False
+        env_cfg.sim.gravity = (0.0, 0.0, -9.81)
     config = ConfigWrapper(agent_cfg, env_cfg)
 
     # specify directory for logging experiments
