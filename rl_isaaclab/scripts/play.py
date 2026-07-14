@@ -26,6 +26,18 @@ parser.add_argument(
     default=True,
     help="Draw the object's up (green), target up (blue), and heading (red) vectors (default: enabled).",
 )
+parser.add_argument(
+    "--print_object_angvel",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Print the object's world-frame and rotation-axis angular velocities.",
+)
+parser.add_argument(
+    "--angvel_print_interval",
+    type=int,
+    default=20,
+    help="Number of policy steps between angular-velocity prints.",
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -82,6 +94,10 @@ def set_camera_light():
 
 @hydra_task_config(args_cli.task, "agent_cfg_entry_point")
 def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
+    if args_cli.angvel_print_interval <= 0:
+        raise ValueError(
+            f"--angvel_print_interval must be positive, got {args_cli.angvel_print_interval}."
+        )
     shutil.rmtree('outputs/')
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     agent_cfg["algorithm"]["max_agent_steps"] = args_cli.max_agent_steps if args_cli.max_agent_steps is not None else agent_cfg["algorithm"]["max_agent_steps"]
@@ -100,6 +116,8 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     env_cfg.sim.gravity = (0, 0, -9.81)
     env_cfg.gravity_curriculum = False
     env_cfg.debug_show_object_vectors = args_cli.show_object_vectors
+    env_cfg.debug_print_object_angvel = args_cli.print_object_angvel
+    env_cfg.debug_print_object_angvel_interval = args_cli.angvel_print_interval
     env_cfg.grasp_cache_path = args_cli.cache if args_cli.cache is not None else env_cfg.grasp_cache_path
     config = ConfigWrapper(agent_cfg, env_cfg, test=True)
 

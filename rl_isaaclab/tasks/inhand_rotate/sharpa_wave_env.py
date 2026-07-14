@@ -409,6 +409,34 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.extras['roll'] = object_angvel[:, 0].mean()
         self.extras['pitch'] = object_angvel[:, 1].mean()
         self.extras['yaw'] = object_angvel[:, 2].mean()
+        if getattr(self.cfg, 'debug_print_object_angvel', False):
+            print_interval = max(1, int(getattr(self.cfg, 'debug_print_object_angvel_interval', 20)))
+            if self.common_step_counter % print_interval == 0:
+                normalized_rot_axis = self.rot_axis / torch.clamp(
+                    torch.norm(self.rot_axis, dim=-1, keepdim=True), min=1.0e-6
+                )
+                axial_angvel = (self.object_angvel * normalized_rot_axis).sum(dim=-1)
+                mean_angvel_w = self.object_angvel.mean(dim=0)
+                mean_speed = torch.norm(self.object_angvel, dim=-1).mean()
+                mean_axial_speed = axial_angvel.mean()
+                mean_abs_axial_speed = axial_angvel.abs().mean()
+                angvel_stats = torch.cat(
+                    (
+                        mean_angvel_w,
+                        mean_speed.reshape(1),
+                        mean_axial_speed.reshape(1),
+                        mean_abs_axial_speed.reshape(1),
+                    )
+                ).detach().cpu()
+                print(
+                    f"[ANGVEL][{type(self.cfg).__name__}] "
+                    f"mean_w=({angvel_stats[0]:+.3f}, {angvel_stats[1]:+.3f}, "
+                    f"{angvel_stats[2]:+.3f}) rad/s | "
+                    f"mean_speed={angvel_stats[3]:.3f} rad/s | "
+                    f"axis_mean={angvel_stats[4]:+.3f} rad/s | "
+                    f"axis_abs_mean={angvel_stats[5]:.3f} rad/s",
+                    flush=True,
+                )
         self.extras['gravity_x'] = self.physics_sim_view.get_gravity()[0]
         self.extras['gravity_y'] = self.physics_sim_view.get_gravity()[1]
         self.extras['gravity_z'] = self.physics_sim_view.get_gravity()[2]

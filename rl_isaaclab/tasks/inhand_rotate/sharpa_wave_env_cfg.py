@@ -328,6 +328,8 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     debug_show_axes = False   # If True, visualize the coordinate axes of the object.
     debug_show_object_pos = False
     debug_show_object_vectors = False
+    debug_print_object_angvel = False
+    debug_print_object_angvel_interval = 20
     vis_object_pos_radius = 0.008
     vis_object_pos_color = (1.0, 0.0, 1.0)
     vis_object_vector_length = 0.15
