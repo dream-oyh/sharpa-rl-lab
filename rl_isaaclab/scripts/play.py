@@ -20,6 +20,12 @@ parser.add_argument("--load_path", type=str, default=None, help="Checkpoint path
 parser.add_argument("--max_agent_steps", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--algorithm", type=str, default=None, help="Run training with multiple GPUs or nodes.")
 parser.add_argument("--resume", action="store_true", default=False, help="Resume training from checkpoint.")
+parser.add_argument(
+    "--show_object_vectors",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Draw the object's up (green), target up (blue), and heading (red) vectors (default: enabled).",
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -56,6 +62,24 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
+
+def set_camera_light():
+    """Use the active viewport's camera light instead of lights authored in the stage."""
+    import carb
+    import omni.kit.actions.core
+
+    action_registry = omni.kit.actions.core.get_action_registry()
+    camera_light_action = action_registry.get_action(
+        "omni.kit.viewport.menubar.lighting", "set_lighting_mode_camera"
+    )
+    if camera_light_action is not None:
+        camera_light_action.execute()
+    else:
+        # Keep camera lighting functional if the viewport lighting menu extension is unavailable.
+        carb.settings.get_settings().set_bool("/rtx/useViewLightingMode", True)
+        carb.log_warn("Viewport lighting action is unavailable; enabled camera light through RTX settings.")
+
+
 @hydra_task_config(args_cli.task, "agent_cfg_entry_point")
 def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     shutil.rmtree('outputs/')
@@ -75,6 +99,7 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     env_cfg.randomize_joint_pos_offset = False
     env_cfg.sim.gravity = (0, 0, -9.81)
     env_cfg.gravity_curriculum = False
+    env_cfg.debug_show_object_vectors = args_cli.show_object_vectors
     env_cfg.grasp_cache_path = args_cli.cache if args_cli.cache is not None else env_cfg.grasp_cache_path
     config = ConfigWrapper(agent_cfg, env_cfg, test=True)
 
@@ -87,6 +112,8 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode=None)
+    if not args_cli.headless:
+        set_camera_light()
     env = GymStyleEnvWrapper(env, clip_actions=env_cfg.clip_actions)
     agent = eval(agent_cfg["algo"])(env, output_dir=log_dir, full_config=config, create_output_dir=False)
     

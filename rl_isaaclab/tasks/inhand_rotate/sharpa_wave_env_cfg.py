@@ -43,6 +43,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     observation_space = 192
     prop_hist_len = 30      # Proprioception hist frames used in policy
     priv_info_dim = 8
+    include_rup_in_priv_info = False
     state_space = 0
     asymmetric_obs = False
     # control
@@ -277,8 +278,9 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     object_z_penalty_scale = 0.0
     object_tip_local_pos = (0, 0, 0.05)
     object_tip_z_penalty_scale = 0.0
-    object_axis_align_axis = (0, 0, 1)
-    object_axis_align_penalty_scale = 0.0
+    object_up_axis = (0, 0, 1)
+    object_heading_axis = (1, 0, 0)
+    object_up_alignment_reward_scale = 0.0
     # grasp cache
     grasp_cache_path = 'cache/sharpa_grasp_linspace' # Grasp cache used in training.
     # noise
@@ -325,7 +327,10 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     # debug
     debug_show_axes = False   # If True, visualize the coordinate axes of the object.
     debug_show_object_pos = False
+    debug_show_object_vectors = False
     vis_object_pos_radius = 0.008
     vis_object_pos_color = (1.0, 0.0, 1.0)
+    vis_object_vector_length = 0.15
+    vis_object_vector_thickness = 0.008
     dome_light_intensity = 8000.0
     dome_light_color = (1.0, 1.0, 1.0)

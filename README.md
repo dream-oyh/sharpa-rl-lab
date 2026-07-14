@@ -45,6 +45,10 @@ python rl_isaaclab/scripts/play.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --n
 ```bash
 python rl_isaaclab/scripts/play.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --num_envs 16 --algorithm ProprioAdapt --load_path ${pth}
 ```
+## 3.3. Visualize bulb grasp cache
+```bash
+python rl_isaaclab/scripts/visualize_bulb_cache.py --num_envs 16
+```
 
 # 4. Deploy
 ## 4.1. Prepare SharpaWave and object

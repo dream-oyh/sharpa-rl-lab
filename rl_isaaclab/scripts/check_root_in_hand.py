@@ -22,7 +22,7 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=512, help="Number of sampled reset states.")
 parser.add_argument("--steps", type=int, default=0, help="Number of zero-action steps after reset before measuring.")
 parser.add_argument("--margin", type=float, default=0.0, help="Margin added to the fingertip AABB check in meters.")
-parser.add_argument("--reward_terms", action="store_true", default=False, help="Print raw and weighted reward terms.")
+parser.add_argument("--reward_terms", action="store_true", default=False, help="Print weighted reward terms.")
 parser.add_argument("--cylinder_cache", type=str, default=None, help="Override cylinder grasp cache prefix.")
 parser.add_argument("--bulb_cache", type=str, default=None, help="Override bulb grasp cache prefix.")
 AppLauncher.add_app_launcher_args(parser)
@@ -123,26 +123,25 @@ def _print_reward_terms(raw_env):
         ("object_pos_diff", "object_pos_reward_scale"),
         ("object_z_penalty", "object_z_penalty_scale"),
         ("object_tip_z_penalty", "object_tip_z_penalty_scale"),
-        ("object_axis_align_penalty", "object_axis_align_penalty_scale"),
+        ("object_up_alignment_reward", "object_up_alignment_reward_scale"),
     ]
-    print("reward term contributions:")
+    print("weighted reward term contributions:")
     weighted_sum = 0.0
     for term_name, scale_name in specs:
-        if term_name not in extras:
+        if term_name not in raw_env._step_reward_terms:
             continue
-        raw = _to_float(extras[term_name])
+        weighted = _to_float(raw_env._step_reward_terms[term_name])
         scale = float(getattr(raw_env.cfg, scale_name))
-        weighted = raw * scale
         weighted_sum += weighted
-        print(f"  {term_name}: raw={raw: .6f}, scale={scale: .6f}, weighted={weighted: .6f}")
-    if "object_axis_align_angle" in extras:
-        print(f"  object_axis_align_angle: raw={_to_float(extras['object_axis_align_angle']): .6f} rad")
+        print(f"  {term_name}: scale={scale: .6f}, weighted={weighted: .6f}")
+    if "up_alignment" in extras:
+        print(f"  up_alignment: raw={_to_float(extras['up_alignment']): .6f}")
     if "object_z_diff" in extras:
         print(f"  object_z_diff: raw={_to_float(extras['object_z_diff']): .6f} m")
     if "object_tip_z_diff" in extras:
         print(f"  object_tip_z_diff: raw={_to_float(extras['object_tip_z_diff']): .6f} m")
-    if "total_reward" in extras:
-        print(f"  total_reward extras: {_to_float(extras['total_reward']): .6f}")
+    if "total_reward" in raw_env._step_reward_terms:
+        print(f"  total_reward: {_to_float(raw_env._step_reward_terms['total_reward']): .6f}")
     print(f"  weighted sum from listed terms: {weighted_sum: .6f}")
 
 

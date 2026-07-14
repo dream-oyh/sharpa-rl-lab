@@ -16,6 +16,9 @@ from rl_isaaclab.tasks.inhand_rotate.sharpa_wave_env_cfg import SharpaWaveEnvCfg
 
 @configclass
 class SharpaWaveBulbEnvCfg(SharpaWaveEnvCfg):
+    priv_info_dim = 11
+    include_rup_in_priv_info = True
+
     bulb_asset_scale = (1.0, 1.0, 1.0)
 
     object_cfg: RigidObjectCfg = RigidObjectCfg(
@@ -64,8 +67,9 @@ class SharpaWaveBulbEnvCfg(SharpaWaveEnvCfg):
     object_z_penalty_scale = 0.0
     object_tip_local_pos = (0, 0, 0.05)
     object_tip_z_penalty_scale = -1.0
-    object_axis_align_axis = (0, 0, 1)
-    object_axis_align_penalty_scale = 0.0
+    object_up_axis = (0, 0, 1)
+    object_heading_axis = (1, 0, 0)
+    object_up_alignment_reward_scale = 0.25
     reset_height_lower = 0.61906
     reset_height_upper = 0.65906
     reset_angle_diff = 10 / 180 * math.pi
