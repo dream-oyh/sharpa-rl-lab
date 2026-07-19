@@ -44,6 +44,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     prop_hist_len = 30      # Proprioception hist frames used in policy
     priv_info_dim = 8
     include_rup_in_priv_info = False
+    include_object_axes_in_priv_info = False
     state_space = 0
     asymmetric_obs = False
     # control

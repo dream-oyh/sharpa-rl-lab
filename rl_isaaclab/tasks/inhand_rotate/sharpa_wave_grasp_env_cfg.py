@@ -40,6 +40,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     observation_space = 192
     prop_hist_len = 30
     priv_info_dim = 8
+    include_rup_in_priv_info = False
     state_space = 0
     asymmetric_obs = False
     # control
@@ -261,6 +262,8 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     reset_height_upper = 0.62406
     reset_angle_diff = 30 / 180 * math.pi
     rot_axis = (0, 0, 1)
+    object_up_axis = (0, 0, 1)
+    object_heading_axis = (1, 0, 0)
     # grasp cache
     grasp_cache_path = None
     grasp_cache_size = 50000

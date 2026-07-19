@@ -18,6 +18,88 @@ def Xform "E27_Bulb" (
     )
     {
         uniform token visibility = "inherited"
+
+        # The source USDZ is Y-up and authored in oversized centimeter units.
+        # Normalize it to a 109 mm tall, Z-up bulb matching this meter-based stage.
+        double3 xformOp:translate = (0, 0, -0.004771492844696)
+        float xformOp:rotateX = 90
+        double3 xformOp:scale = (0.000363333334387, 0.000363333334387, 0.000363333334387)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateX", "xformOp:scale"]
+
+        # Reuse each referenced visual mesh as a convex collision source. Keeping
+        # the opinions in this wrapper avoids modifying or repacking the USDZ.
+        over "Meshes"
+        {
+            over "Sketchfab_model"
+            {
+                over "_435da0c11484780a987912ee66bff77_fbx"
+                {
+                    over "RootNode"
+                    {
+                        over "Bulb"
+                        {
+                            over "Bulb_Inox_0"
+                            {
+                                over "Bulb_Inox_0" (
+                                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                )
+                                {
+                                    uniform token physics:approximation = "convexHull"
+                                    bool physics:collisionEnabled = 1
+                                }
+                            }
+
+                            over "Bulb_White_0"
+                            {
+                                over "Bulb_White_0" (
+                                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                )
+                                {
+                                    uniform token physics:approximation = "convexHull"
+                                    bool physics:collisionEnabled = 1
+                                }
+                            }
+
+                            over "Bulb_Led_0"
+                            {
+                                over "Bulb_Led_0" (
+                                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                )
+                                {
+                                    uniform token physics:approximation = "convexHull"
+                                    bool physics:collisionEnabled = 1
+                                }
+                            }
+
+                            over "Base"
+                            {
+                                over "Base_Inox_0"
+                                {
+                                    over "Base_Inox_0" (
+                                        prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                    )
+                                    {
+                                        uniform token physics:approximation = "convexHull"
+                                        bool physics:collisionEnabled = 1
+                                    }
+                                }
+
+                                over "Base_White_0"
+                                {
+                                    over "Base_White_0" (
+                                        prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                                    )
+                                    {
+                                        uniform token physics:approximation = "convexHull"
+                                        bool physics:collisionEnabled = 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     def Scope "Looks"
@@ -86,41 +168,4 @@ def Xform "E27_Bulb" (
         }
     }
 
-    # Initial approximate collision model. Tune these dimensions after checking the visual scale in IsaacLab.
-    def Sphere "glass_collider" (
-        prepend apiSchemas = ["PhysicsCollisionAPI", "MaterialBindingAPI"]
-    )
-    {
-        bool physics:collisionEnabled = 1
-        rel material:binding = </E27_Bulb/Looks/warm_frosted_glass>
-        double radius = 0.032
-        double3 xformOp:translate = (0, 0, 0.018)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-    }
-
-    def Cylinder "neck_collider" (
-        prepend apiSchemas = ["PhysicsCollisionAPI", "MaterialBindingAPI"]
-    )
-    {
-        bool physics:collisionEnabled = 1
-        rel material:binding = </E27_Bulb/Looks/brushed_aluminum>
-        double height = 0.035
-        double radius = 0.014
-        uniform token axis = "Z"
-        double3 xformOp:translate = (0, 0, -0.023)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-    }
-
-    def Cylinder "base_collider" (
-        prepend apiSchemas = ["PhysicsCollisionAPI", "MaterialBindingAPI"]
-    )
-    {
-        bool physics:collisionEnabled = 1
-        rel material:binding = </E27_Bulb/Looks/brushed_aluminum>
-        double height = 0.018
-        double radius = 0.012
-        uniform token axis = "Z"
-        double3 xformOp:translate = (0, 0, -0.050)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-    }
 }

@@ -738,6 +738,9 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.priv_info_buf[:, 0:3] = self.object_pos - self.object_default_pose[:, :3]
         if self.cfg.include_rup_in_priv_info:
             self.priv_info_buf[:, 8:11] = self.rup
+        if getattr(self.cfg, "include_object_axes_in_priv_info", False):
+            self.priv_info_buf[:, 11:14] = self.object_up_w
+            self.priv_info_buf[:, 14:17] = self.object_heading_w
 
         return obs_buf
     

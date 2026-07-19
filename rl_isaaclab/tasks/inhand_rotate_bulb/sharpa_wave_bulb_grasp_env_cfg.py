@@ -51,16 +51,16 @@ class SharpaWaveBulbGraspEnvCfg(SharpaWaveEnvCfg):
 
     events: EventCfg = EventCfg()
 
-    scale_range = [1.0, 1.0, 1]
+    scale_range = [0.7, 1.1, 5]
     events.rand_params(scale_range)
 
     reset_height_lower = 0.63406
     reset_height_upper = 0.64406
-    reset_angle_diff = 10 / 180 * math.pi
+    reset_angle_diff = 25 / 180 * math.pi
     debug_show_object_pos = True
     rot_axis = (0, 0, 1)
     grasp_cache_path = None
-    save_grasp_cache_path = "cache/sharpa_bulb_grasp_high_1p0_angle10"
+    save_grasp_cache_path = "cache/sharpa_bulb_grasp_high_1p0_angle25"
     grasp_cache_size = 30000
     object_base_friction = 0.5
     randomize_mass_lower = 0.065 / 1.2
