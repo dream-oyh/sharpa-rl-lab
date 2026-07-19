@@ -12,6 +12,7 @@ import numpy as np
 from termcolor import cprint
 
 from rl_isaaclab.utils.misc import AverageScalarMeter, tprint
+from rl_isaaclab.utils.reward_logging import EPISODE_REWARD_INFO_KEY, EPISODE_REWARD_TERMS
 from rl_isaaclab.algo.models.models import ActorCritic
 from rl_isaaclab.algo.models.running_mean_std import RunningMeanStd
 from tensorboardX import SummaryWriter
@@ -104,7 +105,6 @@ class ProprioAdapt(object):
         _last_t = time.time()
 
         obs_dict = self.env.reset()
-        self.agent_steps += self.batch_size
         while self.agent_steps <= 1e9:
             input_dict = {
                 'obs': self.running_mean_std(obs_dict['obs']).detach(),
@@ -133,7 +133,7 @@ class ProprioAdapt(object):
             self.step_reward = self.step_reward * not_dones
             self.step_length = self.step_length * not_dones
 
-            self.log_tensorboard()
+            self.log_tensorboard(info)
 
             if self.agent_steps % 1e8 == 0:
                 self.save(os.path.join(self.nn_dir, f'{self.agent_steps // 1e8}00m'))
@@ -153,9 +153,15 @@ class ProprioAdapt(object):
                           f'Current Best: {self.best_rewards:.2f}'
             tprint(info_string)
 
-    def log_tensorboard(self):
+    def log_tensorboard(self, info):
         self.writer.add_scalar('episode_rewards/step', self.mean_eps_reward.get_mean(), self.agent_steps)
         self.writer.add_scalar('episode_lengths/step', self.mean_eps_length.get_mean(), self.agent_steps)
+        completed_rewards = info.get(EPISODE_REWARD_INFO_KEY)
+        if isinstance(completed_rewards, dict):
+            for term in EPISODE_REWARD_TERMS:
+                values = completed_rewards.get(term)
+                if isinstance(values, torch.Tensor) and values.numel() > 0:
+                    self.writer.add_scalar(f'Reward/{term}', values.float().mean().item(), self.agent_steps)
         for k, v in self.direct_info.items():
             self.writer.add_scalar(f'{k}/frame', v, self.agent_steps)
 

@@ -8,9 +8,9 @@ This is a repo for reinforcement learning sim2real rotation demo on SharpaWave, 
 
 # 1. Environment Setup
 ## 1.1. Follow the official  Isaaclab installation guide:
-Install [IsaacLab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/pip_installation.html). 
+Install [Isaac Lab v2.3.2](https://isaac-sim.github.io/IsaacLab/v2.3.2/source/setup/installation/binaries_installation.html).
 
-Ubuntu 22.04, conda environment, release/2.2.0 and release/2.3.0 have been tested.
+Ubuntu 20.04/22.04, conda environment, Isaac Sim 4.5.0 and Isaac Lab v2.3.2 are supported. Isaac Lab 2.2 is no longer supported because it does not provide tactile contact positions.
 
 CAUTION⚠️: A minimum of 32GB RAM is required. For specific requirements, please refer to [requirements](https://docs.isaacsim.omniverse.nvidia.com/latest/installation/requirements.html).
 ## 1.2. Install this repo:  
@@ -44,6 +44,10 @@ python rl_isaaclab/scripts/play.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --n
 ## 3.2. Visualize distillated policy
 ```bash
 python rl_isaaclab/scripts/play.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --num_envs 16 --algorithm ProprioAdapt --load_path ${pth}
+```
+## 3.3. Visualize bulb grasp cache
+```bash
+python rl_isaaclab/scripts/visualize_bulb_cache.py --num_envs 16
 ```
 
 # 4. Deploy

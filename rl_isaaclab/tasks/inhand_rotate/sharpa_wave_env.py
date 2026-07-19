@@ -19,7 +19,9 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.sensors import ContactSensor
-from isaaclab.utils.math import quat_conjugate, quat_mul, axis_angle_from_quat, saturate, quat_inv
+from isaaclab.utils.math import quat_conjugate, quat_mul, axis_angle_from_quat, saturate, quat_inv, quat_from_matrix
+
+from rl_isaaclab.utils.reward_logging import EPISODE_REWARD_INFO_KEY, EPISODE_REWARD_TERMS
 
 if TYPE_CHECKING:
     from .sharpa_wave_env_cfg import SharpaWaveEnvCfg
@@ -37,6 +39,13 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.num_hand_dofs = self.hand.num_joints
 
         self._axes_visualizer = None
+        self._object_pos_visualizer = None
+        self._object_up_shaft_visualizer = None
+        self._object_up_head_visualizer = None
+        self._object_target_up_shaft_visualizer = None
+        self._object_target_up_head_visualizer = None
+        self._object_heading_shaft_visualizer = None
+        self._object_heading_head_visualizer = None
         if getattr(self.cfg, 'debug_show_axes', True):
             try:
                 from isaaclab.markers import VisualizationMarkers
@@ -52,6 +61,122 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
                 self._axes_visualizer = VisualizationMarkers(axes_marker_cfg)
             except Exception as e:
                 self._axes_visualizer = None
+        if getattr(self.cfg, 'debug_show_object_pos', False):
+            try:
+                from isaaclab.markers import VisualizationMarkers
+                from isaaclab.markers.config import SPHERE_MARKER_CFG
+
+                object_pos_marker_cfg = SPHERE_MARKER_CFG.replace(
+                    prim_path="/Visuals/ObjectRootPosition"
+                )
+                object_pos_marker_cfg.markers["sphere"].radius = getattr(self.cfg, 'vis_object_pos_radius', 0.008)
+                object_pos_marker_cfg.markers["sphere"].visual_material = sim_utils.PreviewSurfaceCfg(
+                    diffuse_color=getattr(self.cfg, 'vis_object_pos_color', (1.0, 0.0, 1.0))
+                )
+                self._object_pos_visualizer = VisualizationMarkers(object_pos_marker_cfg)
+            except Exception:
+                self._object_pos_visualizer = None
+        if getattr(self.cfg, 'debug_show_object_vectors', False):
+            try:
+                from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+
+                vector_length = getattr(self.cfg, 'vis_object_vector_length', 0.08)
+                vector_thickness = getattr(self.cfg, 'vis_object_vector_thickness', 0.008)
+                self._object_vector_head_length = min(0.04, vector_length * 0.3)
+                self._object_vector_shaft_length = vector_length - self._object_vector_head_length
+                shaft_radius = vector_thickness * 0.5
+                head_radius = vector_thickness * 1.5
+
+                up_material = sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0))
+                self._object_up_shaft_visualizer = VisualizationMarkers(
+                    VisualizationMarkersCfg(
+                        prim_path="/Visuals/ObjectUpShaft",
+                        markers={
+                            "shaft": sim_utils.CylinderCfg(
+                                radius=shaft_radius,
+                                height=self._object_vector_shaft_length,
+                                axis="X",
+                                visual_material=up_material,
+                            )
+                        },
+                    )
+                )
+                self._object_up_head_visualizer = VisualizationMarkers(
+                    VisualizationMarkersCfg(
+                        prim_path="/Visuals/ObjectUpHead",
+                        markers={
+                            "head": sim_utils.ConeCfg(
+                                radius=head_radius,
+                                height=self._object_vector_head_length,
+                                axis="X",
+                                visual_material=up_material,
+                            )
+                        },
+                    )
+                )
+
+                target_up_material = sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0))
+                self._object_target_up_shaft_visualizer = VisualizationMarkers(
+                    VisualizationMarkersCfg(
+                        prim_path="/Visuals/ObjectTargetUpShaft",
+                        markers={
+                            "shaft": sim_utils.CylinderCfg(
+                                radius=shaft_radius,
+                                height=self._object_vector_shaft_length,
+                                axis="X",
+                                visual_material=target_up_material,
+                            )
+                        },
+                    )
+                )
+                self._object_target_up_head_visualizer = VisualizationMarkers(
+                    VisualizationMarkersCfg(
+                        prim_path="/Visuals/ObjectTargetUpHead",
+                        markers={
+                            "head": sim_utils.ConeCfg(
+                                radius=head_radius,
+                                height=self._object_vector_head_length,
+                                axis="X",
+                                visual_material=target_up_material,
+                            )
+                        },
+                    )
+                )
+
+                heading_material = sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
+                self._object_heading_shaft_visualizer = VisualizationMarkers(
+                    VisualizationMarkersCfg(
+                        prim_path="/Visuals/ObjectHeadingShaft",
+                        markers={
+                            "shaft": sim_utils.CylinderCfg(
+                                radius=shaft_radius,
+                                height=self._object_vector_shaft_length,
+                                axis="X",
+                                visual_material=heading_material,
+                            )
+                        },
+                    )
+                )
+                self._object_heading_head_visualizer = VisualizationMarkers(
+                    VisualizationMarkersCfg(
+                        prim_path="/Visuals/ObjectHeadingHead",
+                        markers={
+                            "head": sim_utils.ConeCfg(
+                                radius=head_radius,
+                                height=self._object_vector_head_length,
+                                axis="X",
+                                visual_material=heading_material,
+                            )
+                        },
+                    )
+                )
+            except Exception:
+                self._object_up_shaft_visualizer = None
+                self._object_up_head_visualizer = None
+                self._object_target_up_shaft_visualizer = None
+                self._object_target_up_head_visualizer = None
+                self._object_heading_shaft_visualizer = None
+                self._object_heading_head_visualizer = None
 
         # buffers for position targets
         self.prev_targets = torch.zeros((self.num_envs, self.num_hand_dofs), dtype=torch.float, device=self.device)
@@ -64,12 +189,26 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.object_rot_prev = torch.zeros((self.num_envs, 4), dtype=torch.float, device=self.device)
         self.object_default_pose = torch.zeros((self.num_envs, 7), dtype=torch.float, device=self.device)
         self.rb_forces = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.object_up_w = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.object_target_up_w = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.rup = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.object_heading_w = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
 
         # buffers for data
         self.obs_buf_lag_history = torch.zeros((self.num_envs, 80, self.cfg.observation_space//3), device=self.device, dtype=torch.float)
         self.at_reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
         self.proprio_hist_buf = torch.zeros((self.num_envs, self.cfg.prop_hist_len, self.cfg.observation_space//3), device=self.device, dtype=torch.float)
         self.priv_info_buf = torch.zeros((self.num_envs, self.cfg.priv_info_dim), device=self.device, dtype=torch.float)
+
+        # Keep complete, scaled episode returns for every parallel environment.
+        self._episode_reward_sums = {
+            term: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+            for term in EPISODE_REWARD_TERMS
+        }
+        self._step_reward_terms = {
+            term: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+            for term in EPISODE_REWARD_TERMS
+        }
 
         # list of actuated joints
         self.actuated_dof_indices = list()
@@ -171,7 +310,10 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             self._contact_sensor.append(ContactSensor(self.cfg.contact_sensor[id]))
             self.scene.sensors[f"contact_sensor_{id}"] = self._contact_sensor[id]
         # add lights
-        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        light_cfg = sim_utils.DomeLightCfg(
+            intensity=getattr(self.cfg, "dome_light_intensity", 8000.0),
+            color=getattr(self.cfg, "dome_light_color", (1.0, 1.0, 1.0)),
+        )
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
@@ -193,7 +335,10 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             prob = self.cfg.random_force_prob_scalar
             force_indices = (torch.less(torch.rand(self.num_envs, device=self.device), prob)).nonzero().to(self.device)
             self.rb_forces[force_indices, :] = torch.randn(self.rb_forces[force_indices, :].shape, device=self.device) * obj_mass[force_indices, None] * self.cfg.force_scale
-            self.object.set_external_force_and_torque(forces=self.rb_forces.reshape(self.num_envs, 1, 3), torques=torch.zeros(self.num_envs, 1, 3))
+            self.object.set_external_force_and_torque(
+                forces=self.rb_forces.reshape(self.num_envs, 1, 3),
+                torques=torch.zeros((self.num_envs, 1, 3), device=self.device),
+            )
 
     def _apply_action(self) -> None:
         self._refresh_lab()
@@ -215,6 +360,8 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
+        # Completed-episode data is valid for one environment step only.
+        self.extras.pop(EPISODE_REWARD_INFO_KEY, None)
         object_angvel = axis_angle_from_quat(quat_mul(self.object_rot, quat_conjugate(self.object_rot_prev))) / self.step_dt
         rotate_reward = saturate((object_angvel * self.rot_axis).sum(-1), torch.tensor(self.cfg.angvel_clip_min), torch.tensor(self.cfg.angvel_clip_max))
         object_linvel_penalty = torch.norm(self.object_pos - self.object_pos_prev, p=1, dim=-1) / self.step_dt
@@ -222,29 +369,77 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         torque_penalty = (self.hand_dof_torque[:, self.actuated_dof_indices] ** 2).sum(-1)
         work_penalty = ((self.hand_dof_torque[:, self.actuated_dof_indices] * self.hand_dof_vel[:, self.actuated_dof_indices]).sum(-1)) ** 2
         object_pos_diff = 1.0 / (torch.norm(self.object_pos - self.object_default_pose.clone()[:, :3], dim=-1) + 0.001)
+        object_z_diff = torch.abs(self.object_pos[:, 2] - self.object_default_pose[:, 2])
+        object_z_penalty = object_z_diff * object_z_diff
+        object_tip_local_pos = torch.tensor(self.cfg.object_tip_local_pos, device=self.device, dtype=torch.float32).repeat(self.num_envs, 1)
+        object_tip_pos = self.object_pos + quat_rotate(self.object_rot, object_tip_local_pos)
+        default_object_tip_pos = self.object_default_pose[:, :3] + quat_rotate(self.object_default_pose[:, 3:7], object_tip_local_pos)
+        object_tip_z_diff = torch.abs(object_tip_pos[:, 2] - default_object_tip_pos[:, 2])
+        object_tip_z_penalty = object_tip_z_diff * object_tip_z_diff
+        object_up_axis = torch.tensor(self.cfg.object_up_axis, device=self.device, dtype=torch.float32).repeat(self.num_envs, 1)
+        object_up_axis = object_up_axis / torch.clamp(torch.norm(object_up_axis, dim=-1, keepdim=True), min=1.0e-6)
+        object_up = quat_rotate(self.object_rot, object_up_axis)
+        target_up = quat_rotate(self.object_default_pose[:, 3:7], object_up_axis)
+        up_alignment = torch.clamp((object_up * target_up).sum(-1), -1.0, 1.0)
+        object_up_alignment_reward = torch.square((up_alignment + 1.0) / 2.0)
 
-        total_reward = compute_rewards(
-            rotate_reward, self.cfg.rotate_reward_scale,
-            object_linvel_penalty, self.cfg.object_linvel_penalty_scale,
-            pos_diff_penalty, self.cfg.pos_diff_penalty_scale,
-            torque_penalty, self.cfg.torque_penalty_scale,
-            work_penalty, self.cfg.work_penalty_scale,
-            object_pos_diff, self.cfg.object_pos_reward_scale,
-        )
+        reward_terms = {
+            "rotate_reward": rotate_reward * self.cfg.rotate_reward_scale,
+            "object_linvel_penalty": object_linvel_penalty * self.cfg.object_linvel_penalty_scale,
+            "pos_diff_penalty": pos_diff_penalty * self.cfg.pos_diff_penalty_scale,
+            "torque_penalty": torque_penalty * self.cfg.torque_penalty_scale,
+            "work_penalty": work_penalty * self.cfg.work_penalty_scale,
+            "object_pos_diff": object_pos_diff * self.cfg.object_pos_reward_scale,
+            "object_z_penalty": object_z_penalty * self.cfg.object_z_penalty_scale,
+            "object_tip_z_penalty": object_tip_z_penalty * self.cfg.object_tip_z_penalty_scale,
+            "object_up_alignment_reward": (
+                object_up_alignment_reward * self.cfg.object_up_alignment_reward_scale
+            ),
+        }
+        total_reward = torch.stack(tuple(reward_terms.values()), dim=0).sum(dim=0)
+        reward_terms["total_reward"] = total_reward
 
-        self.extras["rotate_reward"] = rotate_reward.mean()
-        self.extras["object_linvel_penalty"] = object_linvel_penalty.mean()
-        self.extras["pos_diff_penalty"] = pos_diff_penalty.mean()
-        self.extras["torque_penalty"] = torque_penalty.mean()
-        self.extras["work_penalty"] = work_penalty.mean()
-        self.extras['object_pos_diff'] = object_pos_diff.mean()
+        self._step_reward_terms = reward_terms
+        for term in EPISODE_REWARD_TERMS:
+            self._episode_reward_sums[term] += reward_terms[term]
+
+        self.extras['object_z_diff'] = object_z_diff.mean()
+        self.extras['object_tip_z_diff'] = object_tip_z_diff.mean()
+        self.extras['up_alignment'] = up_alignment.mean()
         self.extras['roll'] = object_angvel[:, 0].mean()
         self.extras['pitch'] = object_angvel[:, 1].mean()
         self.extras['yaw'] = object_angvel[:, 2].mean()
+        if getattr(self.cfg, 'debug_print_object_angvel', False):
+            print_interval = max(1, int(getattr(self.cfg, 'debug_print_object_angvel_interval', 20)))
+            if self.common_step_counter % print_interval == 0:
+                normalized_rot_axis = self.rot_axis / torch.clamp(
+                    torch.norm(self.rot_axis, dim=-1, keepdim=True), min=1.0e-6
+                )
+                axial_angvel = (self.object_angvel * normalized_rot_axis).sum(dim=-1)
+                mean_angvel_w = self.object_angvel.mean(dim=0)
+                mean_speed = torch.norm(self.object_angvel, dim=-1).mean()
+                mean_axial_speed = axial_angvel.mean()
+                mean_abs_axial_speed = axial_angvel.abs().mean()
+                angvel_stats = torch.cat(
+                    (
+                        mean_angvel_w,
+                        mean_speed.reshape(1),
+                        mean_axial_speed.reshape(1),
+                        mean_abs_axial_speed.reshape(1),
+                    )
+                ).detach().cpu()
+                print(
+                    f"[ANGVEL][{type(self.cfg).__name__}] "
+                    f"mean_w=({angvel_stats[0]:+.3f}, {angvel_stats[1]:+.3f}, "
+                    f"{angvel_stats[2]:+.3f}) rad/s | "
+                    f"mean_speed={angvel_stats[3]:.3f} rad/s | "
+                    f"axis_mean={angvel_stats[4]:+.3f} rad/s | "
+                    f"axis_abs_mean={angvel_stats[5]:.3f} rad/s",
+                    flush=True,
+                )
         self.extras['gravity_x'] = self.physics_sim_view.get_gravity()[0]
         self.extras['gravity_y'] = self.physics_sim_view.get_gravity()[1]
         self.extras['gravity_z'] = self.physics_sim_view.get_gravity()[2]
-        self.extras['total_reward'] = total_reward.mean()
         return total_reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -275,6 +470,22 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
             env_ids = self.hand._ALL_INDICES
+        env_ids = torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
+
+        # Rewards are computed before DirectRLEnv auto-resets done environments,
+        # so these sums already contain the final transition. A full/manual
+        # reset has episode length zero and therefore only clears the buffers.
+        self.extras.pop(EPISODE_REWARD_INFO_KEY, None)
+        completed_mask = self.reset_buf[env_ids] & (self.episode_length_buf[env_ids] > 0)
+        completed_env_ids = env_ids[completed_mask]
+        if len(completed_env_ids) > 0:
+            self.extras[EPISODE_REWARD_INFO_KEY] = {
+                term: self._episode_reward_sums[term][completed_env_ids].clone()
+                for term in EPISODE_REWARD_TERMS
+            }
+        for episode_sum in self._episode_reward_sums.values():
+            episode_sum[env_ids] = 0.0
+
         # resets articulation and rigid body attributes
         super()._reset_idx(env_ids)
 
@@ -307,20 +518,22 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
 
         # reset object
         object_default_state = self.object.data.default_root_state.clone()[env_ids]
+        object_reference_pose = object_default_state[:, :7].clone()
         # global object positions
         if self.cfg.reset_random_quat:
-            _, object_default_pos = apply_random_rotation_with_center(object_default_state[:, 3:7], object_default_state[:, 0:3], rotate_center, q_rand)
-            self.object_default_pose[env_ids, :3] = object_default_pos.clone()
+            object_reference_pose[:, 3:7], object_reference_pose[:, 0:3] = apply_random_rotation_with_center(
+                object_reference_pose[:, 3:7], object_reference_pose[:, 0:3], rotate_center, q_rand
+            )
+            self.object_default_pose[env_ids, :] = object_reference_pose.clone()
             object_default_state[:, 3:7], object_default_state[:, 0:3] = apply_random_rotation_with_center(sampled_pose[:, 25:29], sampled_pose[:, 22:25], rotate_center, q_rand)
             object_default_state[:, 0:3] += self.scene.env_origins[env_ids]
         else:
-            self.object_default_pose[env_ids, :3] = object_default_state[:, :3].clone()
+            self.object_default_pose[env_ids, :] = object_reference_pose.clone()
             object_default_state[:, 0:3] = sampled_pose[:, 22:25] + self.scene.env_origins[env_ids]
             object_default_state[:, 3:7] = sampled_pose[:, 25:29]
         object_default_state[:, 7:] = torch.zeros_like(self.object.data.default_root_state[env_ids, 7:])
         self.object.write_root_pose_to_sim(object_default_state[:, :7], env_ids)
         self.object.write_root_velocity_to_sim(object_default_state[:, 7:], env_ids)
-        self.object_default_pose[env_ids, 3:7] = object_default_state[:, 3:7]
         self.rb_forces[env_ids, :] = 0.0
 
         self.reset_height_lower[env_ids] = object_default_state[:, 2] - (self.cfg.reset_height_upper - self.cfg.reset_height_lower) / 2
@@ -365,6 +578,21 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.object_linvel = self.object.data.root_lin_vel_w
         self.object_angvel = self.object.data.root_ang_vel_w
 
+        object_up_axis = torch.tensor(self.cfg.object_up_axis, device=self.device, dtype=torch.float32).expand(
+            self.num_envs, -1
+        )
+        object_up_axis = object_up_axis / torch.clamp(torch.norm(object_up_axis, dim=-1, keepdim=True), min=1.0e-6)
+        object_heading_axis = torch.tensor(
+            self.cfg.object_heading_axis, device=self.device, dtype=torch.float32
+        ).expand(self.num_envs, -1)
+        object_heading_axis = object_heading_axis / torch.clamp(
+            torch.norm(object_heading_axis, dim=-1, keepdim=True), min=1.0e-6
+        )
+        self.object_up_w = quat_rotate(self.object_rot, object_up_axis)
+        self.object_target_up_w = quat_rotate(self.object_default_pose[:, 3:7], object_up_axis)
+        self.rup = self.object_target_up_w - self.object_up_w
+        self.object_heading_w = quat_rotate(self.object_rot, object_heading_axis)
+
         # visualize coordinate axes for cylinder using VisualizationMarkers
         if getattr(self.cfg, 'debug_show_axes', True) and self._axes_visualizer is not None and self.num_envs > 0:
             try:
@@ -372,6 +600,60 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
                 cyl_pos_w = self.object.data.root_pos_w
                 cyl_quat_w = self.object.data.root_quat_w
                 self._axes_visualizer.visualize(translations=cyl_pos_w, orientations=cyl_quat_w)
+            except Exception:
+                pass
+        if getattr(self.cfg, 'debug_show_object_pos', False) and self._object_pos_visualizer is not None and self.num_envs > 0:
+            try:
+                self._object_pos_visualizer.visualize(translations=self.object.data.root_pos_w)
+            except Exception:
+                pass
+        if getattr(self.cfg, 'debug_show_object_vectors', False) and self.num_envs > 0:
+            object_pos_w = self.object.data.root_pos_w
+            try:
+                if self._object_up_shaft_visualizer is not None and self._object_up_head_visualizer is not None:
+                    up_orientation = _vector_to_arrow_quat(self.object_up_w)
+                    self._object_up_shaft_visualizer.visualize(
+                        translations=object_pos_w + self.object_up_w * (0.5 * self._object_vector_shaft_length),
+                        orientations=up_orientation,
+                    )
+                    self._object_up_head_visualizer.visualize(
+                        translations=object_pos_w
+                        + self.object_up_w
+                        * (self._object_vector_shaft_length + 0.5 * self._object_vector_head_length),
+                        orientations=up_orientation,
+                    )
+                if (
+                    self._object_target_up_shaft_visualizer is not None
+                    and self._object_target_up_head_visualizer is not None
+                ):
+                    target_up_orientation = _vector_to_arrow_quat(self.object_target_up_w)
+                    self._object_target_up_shaft_visualizer.visualize(
+                        translations=object_pos_w
+                        + self.object_target_up_w * (0.5 * self._object_vector_shaft_length),
+                        orientations=target_up_orientation,
+                    )
+                    self._object_target_up_head_visualizer.visualize(
+                        translations=object_pos_w
+                        + self.object_target_up_w
+                        * (self._object_vector_shaft_length + 0.5 * self._object_vector_head_length),
+                        orientations=target_up_orientation,
+                    )
+                if (
+                    self._object_heading_shaft_visualizer is not None
+                    and self._object_heading_head_visualizer is not None
+                ):
+                    heading_orientation = _vector_to_arrow_quat(self.object_heading_w)
+                    self._object_heading_shaft_visualizer.visualize(
+                        translations=object_pos_w
+                        + self.object_heading_w * (0.5 * self._object_vector_shaft_length),
+                        orientations=heading_orientation,
+                    )
+                    self._object_heading_head_visualizer.visualize(
+                        translations=object_pos_w
+                        + self.object_heading_w
+                        * (self._object_vector_shaft_length + 0.5 * self._object_vector_head_length),
+                        orientations=heading_orientation,
+                    )
             except Exception:
                 pass
 
@@ -403,12 +685,20 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
 
         # contact pos
         contact_pos = torch.zeros((self.num_envs, len(self._contact_body_ids), 3), dtype=torch.float32, device=self.device)
-        if self.cfg.enable_contact_pos and hasattr(self._contact_sensor[0].data, "contact_pos_w"):
-            not_contact_mask = sensed_contacts < 1.0e-6
+        if self.cfg.enable_contact_pos:
+            contact_pos_w = [getattr(self._contact_sensor[id].data, "contact_pos_w", None) for id in self._contact_body_ids]
+            if any(pos is None for pos in contact_pos_w):
+                raise RuntimeError(
+                    "Contact positions are enabled, but at least one tactile contact sensor does not provide "
+                    "'contact_pos_w'. Use Isaac Lab 2.3+ and set track_contact_points=True."
+                )
+
+            contact_pos = torch.cat([pos[:, 0, 0, :].unsqueeze(1) for pos in contact_pos_w], dim=1)
+            valid_contact_pos_mask = torch.isfinite(contact_pos).all(dim=-1)
+            not_contact_mask = (sensed_contacts < 1.0e-6) | ~valid_contact_pos_mask
             not_contact_mask[:, self._contact_body_ids_disable] = True
             contact_mask = ~not_contact_mask
 
-            contact_pos = torch.cat([self._contact_sensor[id].data.contact_pos_w[:, 0, 0, :].unsqueeze(1) for id in self._contact_body_ids], dim=1)
             contact_pos = torch.nan_to_num(contact_pos, nan=0.0)
             contact_pos[contact_mask, :] = transform_between_frames(contact_pos[contact_mask, :] - tactile_frame_pos[contact_mask, :], world_quat[contact_mask, :], tactile_frame_quat[contact_mask, :])
             contact_pos[not_contact_mask, :] = 0.0
@@ -446,6 +736,11 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
 
         self.proprio_hist_buf[:] = self.obs_buf_lag_history[:, -self.cfg.prop_hist_len:].clone()
         self.priv_info_buf[:, 0:3] = self.object_pos - self.object_default_pose[:, :3]
+        if self.cfg.include_rup_in_priv_info:
+            self.priv_info_buf[:, 8:11] = self.rup
+        if getattr(self.cfg, "include_object_axes_in_priv_info", False):
+            self.priv_info_buf[:, 11:14] = self.object_up_w
+            self.priv_info_buf[:, 14:17] = self.object_heading_w
 
         return obs_buf
     
@@ -475,22 +770,22 @@ def scale(x, lower, upper):
 def unscale(x, lower, upper):
     return (2.0 * x - upper - lower) / (upper - lower)
 
-@torch.jit.script
-def compute_rewards(
-    rotate_reward: torch.Tensor, rotate_reward_scale: float,
-    object_linvel_penalty: torch.Tensor, object_linvel_penalty_scale: float,
-    pos_diff_penalty: torch.Tensor, pos_diff_penalty_scale: float,
-    torque_penalty: torch.Tensor, torque_penalty_scale: float,
-    work_penalty: torch.Tensor, work_penalty_scale: float,
-    object_pos_diff: torch.Tensor, object_pos_reward_scale: float,
-):
-    reward = rotate_reward * rotate_reward_scale
-    reward += object_linvel_penalty * object_linvel_penalty_scale
-    reward += pos_diff_penalty * pos_diff_penalty_scale
-    reward += torque_penalty * torque_penalty_scale
-    reward += work_penalty * work_penalty_scale
-    reward += object_pos_diff * object_pos_reward_scale
-    return reward
+
+def _vector_to_arrow_quat(vector: torch.Tensor) -> torch.Tensor:
+    """Return a world-frame quaternion that points an arrow's local +X along ``vector``."""
+    x_axis = vector / torch.clamp(torch.norm(vector, dim=-1, keepdim=True), min=1.0e-6)
+    helper_axis = torch.zeros_like(x_axis)
+    helper_axis[:, 2] = 1.0
+    parallel_to_z = torch.abs(x_axis[:, 2]) > 0.99
+    helper_axis[parallel_to_z, 1] = 1.0
+    helper_axis[parallel_to_z, 2] = 0.0
+
+    y_axis = torch.cross(helper_axis, x_axis, dim=-1)
+    y_axis = y_axis / torch.clamp(torch.norm(y_axis, dim=-1, keepdim=True), min=1.0e-6)
+    z_axis = torch.cross(x_axis, y_axis, dim=-1)
+    rotation_matrix = torch.stack((x_axis, y_axis, z_axis), dim=-1)
+    return quat_from_matrix(rotation_matrix)
+
 
 @torch.jit.script
 def angle_between_axis_and_z(quat: torch.Tensor, eps: float = 1.0e-6) -> torch.Tensor:

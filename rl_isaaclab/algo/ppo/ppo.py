@@ -19,6 +19,7 @@ from rl_isaaclab.algo.models.models import ActorCritic
 from rl_isaaclab.algo.models.running_mean_std import RunningMeanStd
 
 from rl_isaaclab.utils.misc import AverageScalarMeter
+from rl_isaaclab.utils.reward_logging import EPISODE_REWARD_INFO_KEY, EPISODE_REWARD_TERMS
 
 from tensorboardX import SummaryWriter
 
@@ -94,6 +95,7 @@ class PPO(object):
         self.save_best_after = self.ppo_config['save_best_after']
         # ---- Tensorboard Logger ----
         self.extra_info = {}
+        self.episode_reward_batches = {term: [] for term in EPISODE_REWARD_TERMS}
         if create_output_dir:
             writer = SummaryWriter(self.tb_dif)
             self.writer = writer
@@ -136,6 +138,12 @@ class PPO(object):
         for k, v in self.extra_info.items():
             self.writer.add_scalar(f'{k}', v, self.agent_steps)
 
+        for term in EPISODE_REWARD_TERMS:
+            batches = self.episode_reward_batches[term]
+            if batches:
+                episode_mean = torch.cat(batches).mean().item()
+                self.writer.add_scalar(f'Reward/{term}', episode_mean, self.agent_steps)
+
     def set_eval(self):
         self.model.eval()
         if self.normalize_input:
@@ -164,7 +172,6 @@ class PPO(object):
         _t = time.time()
         _last_t = time.time()
         self.obs = self.env.reset()
-        self.agent_steps = self.batch_size
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch_num += 1
@@ -319,6 +326,7 @@ class PPO(object):
         return a_losses, c_losses, b_losses, entropies, kls
 
     def play_steps(self):
+        self.episode_reward_batches = {term: [] for term in EPISODE_REWARD_TERMS}
         for n in range(self.horizon_length):
             res_dict = self.model_act(self.obs)
             # collect o_t
@@ -344,6 +352,13 @@ class PPO(object):
             self.episode_lengths.update(self.current_lengths[done_indices])
 
             assert isinstance(infos, dict), 'Info Should be a Dict'
+            completed_rewards = infos.get(EPISODE_REWARD_INFO_KEY)
+            if isinstance(completed_rewards, dict):
+                for term in EPISODE_REWARD_TERMS:
+                    values = completed_rewards.get(term)
+                    if isinstance(values, torch.Tensor) and values.numel() > 0:
+                        self.episode_reward_batches[term].append(values.detach().reshape(-1))
+
             self.extra_info = {}
             for k, v in infos.items():
                 # only log scalars

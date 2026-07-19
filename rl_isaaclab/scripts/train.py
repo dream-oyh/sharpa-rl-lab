@@ -5,6 +5,7 @@
 
 
 import argparse
+import math
 import sys
 import shutil
 
@@ -47,6 +48,7 @@ from rl_isaaclab.wrapper.config_wrapper import ConfigWrapper
 from isaaclab.envs import DirectRLEnvCfg
 
 import rl_isaaclab.tasks.inhand_rotate
+import rl_isaaclab.tasks.inhand_rotate_bulb
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 # PLACEHOLDER: Extension template (do not remove this comment)
@@ -69,9 +71,19 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     agent_cfg["algo"] = args_cli.algorithm if args_cli.algorithm is not None else agent_cfg["algo"]
     agent_cfg["load_path"] = args_cli.load_path if args_cli.load_path is not None else agent_cfg["load_path"]
     env_cfg.grasp_cache_path = args_cli.cache if args_cli.cache is not None else env_cfg.grasp_cache_path
-    agent_cfg["algorithm"]['minibatch_size'] = min([args_cli.num_envs * 8, 32768])
+    batch_size = agent_cfg["algorithm"]["num_actors"] * agent_cfg["algorithm"]["horizon_length"]
+    max_minibatch_size = min(agent_cfg["algorithm"]["minibatch_size"], batch_size)
+    num_minibatches = math.ceil(batch_size / max_minibatch_size)
+    while batch_size % num_minibatches != 0:
+        num_minibatches += 1
+    agent_cfg["algorithm"]["minibatch_size"] = batch_size // num_minibatches
+    print(
+        f"[INFO] PPO batch_size={batch_size}, minibatch_size="
+        f"{agent_cfg['algorithm']['minibatch_size']}, num_minibatches={num_minibatches}"
+    )
     if agent_cfg["algo"] == "ProprioAdapt":
         env_cfg.gravity_curriculum = False
+        env_cfg.sim.gravity = (0.0, 0.0, -9.81)
     config = ConfigWrapper(agent_cfg, env_cfg)
 
     # specify directory for logging experiments

@@ -43,6 +43,8 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     observation_space = 192
     prop_hist_len = 30      # Proprioception hist frames used in policy
     priv_info_dim = 8
+    include_rup_in_priv_info = False
+    include_object_axes_in_priv_info = False
     state_space = 0
     asymmetric_obs = False
     # control
@@ -137,26 +139,36 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_thumb_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_index_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_middle_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_ring_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_pinky_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         # DP
@@ -264,6 +276,12 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     torque_penalty_scale = -0.1
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
+    object_z_penalty_scale = 0.0
+    object_tip_local_pos = (0, 0, 0.05)
+    object_tip_z_penalty_scale = 0.0
+    object_up_axis = (0, 0, 1)
+    object_heading_axis = (1, 0, 0)
+    object_up_alignment_reward_scale = 0.0
     # grasp cache
     grasp_cache_path = 'cache/sharpa_grasp_linspace' # Grasp cache used in training.
     # noise
@@ -271,7 +289,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     # contact
     enable_tactile = True       # If True, the tactile sensor is enabled.
     binary_contact = False      # If True, the output tactile force will be binarized according to the contact_threshold.
-    enable_contact_pos = False  # Not tested yet. If True, the tactile sensor will output the contact position.
+    enable_contact_pos = True   # If True, the tactile sensor outputs contact positions in each elastomer frame.
     disable_tactile_ids = []    # Set 0 to according tactile ids.
                                 # 0, 1, 2, 3, 4 are thumb, index, middle, ring, pinky finger, respectively.
     contact_smooth = 0.5        # Smoothing factor for tactile force.
@@ -309,3 +327,13 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     gravity_curriculum = True # If True, gravity is gradually increased during training, upper limits is 10m/s^2.
     # debug
     debug_show_axes = False   # If True, visualize the coordinate axes of the object.
+    debug_show_object_pos = False
+    debug_show_object_vectors = False
+    debug_print_object_angvel = False
+    debug_print_object_angvel_interval = 20
+    vis_object_pos_radius = 0.008
+    vis_object_pos_color = (1.0, 0.0, 1.0)
+    vis_object_vector_length = 0.15
+    vis_object_vector_thickness = 0.008
+    dome_light_intensity = 8000.0
+    dome_light_color = (1.0, 1.0, 1.0)

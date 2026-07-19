@@ -40,6 +40,7 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     observation_space = 192
     prop_hist_len = 30
     priv_info_dim = 8
+    include_rup_in_priv_info = False
     state_space = 0
     asymmetric_obs = False
     # control
@@ -134,26 +135,36 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_thumb_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_index_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_middle_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_ring_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         ContactSensorCfg(
             prim_path="/World/envs/env_.*/Robot/right_pinky_elastomer",
             history_length=3,
+            track_contact_points=True,
+            max_contact_data_count_per_prim=10,
             filter_prim_paths_expr=["/World/envs/env_.*/object"],
         ),
         # DP
@@ -251,14 +262,17 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     reset_height_upper = 0.62406
     reset_angle_diff = 30 / 180 * math.pi
     rot_axis = (0, 0, 1)
+    object_up_axis = (0, 0, 1)
+    object_heading_axis = (1, 0, 0)
     # grasp cache
     grasp_cache_path = None
+    grasp_cache_size = 50000
     # noise
     joint_noise_scale = 0.02
     # contact
     enable_tactile = True
     binary_contact = False
-    enable_contact_pos = False
+    enable_contact_pos = True
     disable_tactile_ids = []
     contact_smooth = 0.5
     contact_threshold = 0.05
@@ -293,3 +307,6 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     force_decay_interval = 0.08
     # curriculum
     gravity_curriculum = False
+    # debug
+    dome_light_intensity = 8000.0
+    dome_light_color = (1.0, 1.0, 1.0)
