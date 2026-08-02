@@ -242,16 +242,23 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
                 act.damping = torch.zeros_like(act.damping, device=self.device)
 
         # grasp_cache
-        if self.num_envs % self.cfg.scale_range[2] != 0:
-            carb.log_error(f"num_envs must be divisible by scale num: {self.cfg.scale_range[2]}")
-            exit()
-        scale_ids = torch.linspace(0, self.cfg.scale_range[2]-1, self.cfg.scale_range[2], device=self.device, dtype=torch.int32).reshape(-1, 1)
-        scale_ids = scale_ids.repeat(1, math.ceil(self.num_envs/self.cfg.scale_range[2]))
-        self.scale_ids = scale_ids.reshape(-1, 1)[:self.num_envs]
+        num_scale_buckets = int(self.cfg.scale_range[2])
+        if num_scale_buckets <= 0:
+            raise ValueError(f"scale_range must contain a positive bucket count, got {self.cfg.scale_range}.")
+        envs_per_scale = math.ceil(self.num_envs / num_scale_buckets)
+        self.scale_ids = torch.div(
+            torch.arange(self.num_envs, device=self.device),
+            envs_per_scale,
+            rounding_mode="floor",
+        ).clamp_max(num_scale_buckets - 1).to(torch.int32).reshape(-1, 1)
         if self.cfg.grasp_cache_path:
             self.saved_grasping_states = torch.from_numpy(np.load(f"{self.cfg.grasp_cache_path}_{self.cfg.scale_range[0]}-{self.cfg.scale_range[1]}-{self.cfg.scale_range[2]}.npy")).float().to(self.device)
-            self.bucket_grasp = int(self.saved_grasping_states.shape[0] / self.cfg.scale_range[2])
-            self.bucket_env = int(self.num_envs / self.cfg.scale_range[2])
+            if self.saved_grasping_states.shape[0] % num_scale_buckets != 0:
+                raise ValueError(
+                    f"Cache rows ({self.saved_grasping_states.shape[0]}) must be divisible by "
+                    f"scale buckets ({num_scale_buckets})."
+                )
+            self.bucket_grasp = int(self.saved_grasping_states.shape[0] / num_scale_buckets)
         else:
             self.saved_grasping_states = None
 
@@ -502,11 +509,12 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
 
         # pose cache
         if self.saved_grasping_states is not None:
-            sampled_pose_idx = torch.randint(0, self.bucket_grasp, size=(self.bucket_env,))
-            saved_grasping_states_picked = torch.zeros((self.num_envs, 29), device=self.device)
-            for i in range(self.cfg.scale_range[2]):
-                saved_grasping_states_picked[i*self.bucket_env:(i+1)*self.bucket_env] = self.saved_grasping_states[i*self.bucket_grasp:(i+1)*self.bucket_grasp][sampled_pose_idx]
-            sampled_pose = saved_grasping_states_picked[env_ids].clone()
+            sampled_pose_idx = torch.randint(
+                0, self.bucket_grasp, size=(len(env_ids),), device=self.device
+            )
+            sampled_scale_ids = self.scale_ids[env_ids].squeeze(-1).to(torch.long)
+            sampled_cache_idx = sampled_scale_ids * self.bucket_grasp + sampled_pose_idx
+            sampled_pose = self.saved_grasping_states[sampled_cache_idx].clone()
         else:
             raise RuntimeError("No saved grasping states found")
         
