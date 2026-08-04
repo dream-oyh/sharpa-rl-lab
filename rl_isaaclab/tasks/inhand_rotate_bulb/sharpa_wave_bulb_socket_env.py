@@ -101,9 +101,19 @@ class SharpaWaveInhandRotateBulbSocketEnv(SharpaWaveInhandRotateEnv):
         )
 
     def _setup_scene(self):
-        # Spawn the source anchor and joint before the parent clones env_0.  The
-        # relationship targets are internal to env_0 and are remapped by cloning.
+        # Spawn the source anchor and optional constraint before the parent
+        # clones env_0. Relationship targets internal to env_0 are remapped by
+        # cloning. Subclasses can replace the revolute joint with contact
+        # geometry while preserving the cache/reset alignment logic.
         self.socket_anchor = RigidObject(self.cfg.socket_anchor_cfg)
+
+        self._create_socket_constraint()
+
+        super()._setup_scene()
+        self.scene.rigid_objects["socket_anchor"] = self.socket_anchor
+
+    def _create_socket_constraint(self):
+        """Create the fixed-axis baseline constraint in the source environment."""
 
         stage = omni.usd.get_context().get_stage()
         env_path = "/World/envs/env_0"
@@ -126,9 +136,6 @@ class SharpaWaveInhandRotateBulbSocketEnv(SharpaWaveInhandRotateEnv):
             drive.CreateDampingAttr(damping)
             drive.CreateTargetVelocityAttr(0.0)
             drive.CreateMaxForceAttr(float("inf"))
-
-        super()._setup_scene()
-        self.scene.rigid_objects["socket_anchor"] = self.socket_anchor
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:

@@ -1,0 +1,35 @@
+#usda 1.0
+(
+    defaultPrim = "E27_Bulb"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "E27_Bulb" (
+    prepend references = @./E27_Bulb_rigid.usda@</E27_Bulb>
+)
+{
+    over "thread_visual"
+    {
+        over "thread_ring_0" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            bool physics:collisionEnabled = 1
+        }
+
+        over "thread_ring_1" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            bool physics:collisionEnabled = 1
+        }
+
+        over "thread_ring_2" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            bool physics:collisionEnabled = 1
+        }
+    }
+}

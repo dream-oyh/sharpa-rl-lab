@@ -36,6 +36,20 @@ python rl_isaaclab/scripts/train.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --
 python rl_isaaclab/scripts/train.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --headless --algorithm ProprioAdapt --load_path ${pth}
 ```
 
+## 2.4. Bulb ring task
+The ring task keeps the bulb fully free under gravity and uses a physical guide
+collider instead of a revolute joint.
+
+```bash
+# Validate the ring asset, reward terms, gravity, collision, and scale matching.
+python rl_isaaclab/scripts/smoke_test_bulb_ring.py --headless --device cuda:0
+
+# Train with the five matched bulb/ring scales.
+python rl_isaaclab/scripts/train.py \
+  --task Isaac-Inhand-Rotate-Sharpa-Wave-Bulb-Ring-v0 \
+  --headless --num_envs 8192
+```
+
 # 3. Visualization
 ## 3.1. Visualize trained policy
 ```bash

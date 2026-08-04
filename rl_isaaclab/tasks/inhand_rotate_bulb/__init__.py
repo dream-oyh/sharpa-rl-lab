@@ -40,3 +40,18 @@ gym.register(
         "agent_cfg_entry_point": f"{agents.__name__}:ppo_socket_cfg.yaml",
     },
 )
+
+gym.register(
+    id="Isaac-Inhand-Rotate-Sharpa-Wave-Bulb-Ring-v0",
+    entry_point=(
+        "rl_isaaclab.tasks.inhand_rotate_bulb.sharpa_wave_bulb_ring_env:"
+        "SharpaWaveInhandRotateBulbRingEnv"
+    ),
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.sharpa_wave_bulb_ring_env_cfg:SharpaWaveBulbRingEnvCfg"
+        ),
+        "agent_cfg_entry_point": f"{agents.__name__}:ppo_ring_cfg.yaml",
+    },
+)
