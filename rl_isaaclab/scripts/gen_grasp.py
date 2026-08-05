@@ -51,7 +51,7 @@ torch.backends.cudnn.benchmark = False
 
 @hydra_task_config(args_cli.task, "agent_cfg_entry_point")
 def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
-    shutil.rmtree('outputs/')
+    shutil.rmtree('outputs/', ignore_errors=True)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.seed = args_cli.seed if args_cli.seed is not None else agent_cfg['seed']
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device

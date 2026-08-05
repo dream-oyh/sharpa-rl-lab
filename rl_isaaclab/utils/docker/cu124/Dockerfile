@@ -17,7 +17,7 @@ RUN pip install \
     omegaconf==2.3.0 \
     pynput \
     termcolor \
-    tensorboardX
+    wandb
 
 RUN pip install --index-url https://download.pytorch.org/whl/cu124 \
     torch==2.6.0 \

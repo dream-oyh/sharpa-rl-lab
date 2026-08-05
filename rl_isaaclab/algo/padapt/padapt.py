@@ -15,7 +15,7 @@ from rl_isaaclab.utils.misc import AverageScalarMeter, tprint
 from rl_isaaclab.utils.reward_logging import EPISODE_REWARD_INFO_KEY, EPISODE_REWARD_TERMS
 from rl_isaaclab.algo.models.models import ActorCritic
 from rl_isaaclab.algo.models.running_mean_std import RunningMeanStd
-from tensorboardX import SummaryWriter
+from rl_isaaclab.utils.wandb_logger import WandbWriter, full_config_to_dict, run_identity
 
 
 class ProprioAdapt(object):
@@ -54,12 +54,22 @@ class ProprioAdapt(object):
         # ---- Output Dir ----
         self.output_dir = output_dir
         self.nn_dir = os.path.join(self.output_dir, 'stage2_nn')
-        self.tb_dir = os.path.join(self.output_dir, 'stage2_tb')
+        self.wandb_dir = os.path.join(self.output_dir, 'stage2_wandb')
+        self.tb_dir = self.wandb_dir  # kept as an alias for backwards compatibility
+        self.writer = None
         if create_output_dir:
             os.makedirs(self.nn_dir, exist_ok=True)
-            os.makedirs(self.tb_dir, exist_ok=True)
-            writer = SummaryWriter(self.tb_dir)
-            self.writer = writer
+            os.makedirs(self.wandb_dir, exist_ok=True)
+            run_name, group = run_identity(
+                self.output_dir, self.ppo_config['experiment_name'], 'stage2'
+            )
+            self.writer = WandbWriter(
+                log_dir=self.wandb_dir,
+                config=full_config_to_dict(full_config),
+                run_name=run_name,
+                group=group,
+                job_type='stage2',
+            )
         self.direct_info = {}
         # ---- Misc ----
         self.batch_size = self.num_actors
@@ -133,7 +143,8 @@ class ProprioAdapt(object):
             self.step_reward = self.step_reward * not_dones
             self.step_length = self.step_length * not_dones
 
-            self.log_tensorboard(info)
+            if self.writer is not None:
+                self.log_tensorboard(info)
 
             if self.agent_steps % 1e8 == 0:
                 self.save(os.path.join(self.nn_dir, f'{self.agent_steps // 1e8}00m'))
@@ -152,6 +163,9 @@ class ProprioAdapt(object):
                           f'Mean Rewards: {mean_rewards:.2f} | ' \
                           f'Current Best: {self.best_rewards:.2f}'
             tprint(info_string)
+
+        if self.writer is not None:
+            self.writer.close()
 
     def log_tensorboard(self, info):
         self.writer.add_scalar('episode_rewards/step', self.mean_eps_reward.get_mean(), self.agent_steps)

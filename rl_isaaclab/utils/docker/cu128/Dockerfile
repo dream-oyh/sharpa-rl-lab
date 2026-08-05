@@ -12,7 +12,7 @@ RUN pip install --break-system-packages \
     omegaconf==2.3.0 \
     pynput \
     termcolor \
-    tensorboardX
+    wandb
 
 RUN pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu128 \
     torch==2.8.0 \

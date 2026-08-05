@@ -7,7 +7,7 @@ name = "sharpawave-rl-lab"
 version = "1.0.1"
 description = "sharpawave rl repo"
 authors = [{ name = "sharpa" }]
-dependencies = []
+dependencies = ["wandb>=0.16,<1.0"]
 requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]

@@ -9,3 +9,7 @@ python/
 !pretrained
 eval_data/
 *.mp4
+.claude/
+wandb/
+outputs/
+sharpa.script

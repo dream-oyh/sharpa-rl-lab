@@ -21,7 +21,7 @@ from rl_isaaclab.algo.models.running_mean_std import RunningMeanStd
 from rl_isaaclab.utils.misc import AverageScalarMeter
 from rl_isaaclab.utils.reward_logging import EPISODE_REWARD_INFO_KEY, EPISODE_REWARD_TERMS
 
-from tensorboardX import SummaryWriter
+from rl_isaaclab.utils.wandb_logger import WandbWriter, full_config_to_dict, run_identity
 
 
 class PPO(object):
@@ -59,10 +59,11 @@ class PPO(object):
         # allows us to specify a folder where all experiments will reside
         self.output_dir = output_dir
         self.nn_dir = os.path.join(self.output_dir, 'stage1_nn')
-        self.tb_dif = os.path.join(self.output_dir, 'stage1_tb')
+        self.wandb_dir = os.path.join(self.output_dir, 'stage1_wandb')
+        self.tb_dif = self.wandb_dir  # kept as an alias for backwards compatibility
         if create_output_dir:
             os.makedirs(self.nn_dir, exist_ok=True)
-            os.makedirs(self.tb_dif, exist_ok=True)
+            os.makedirs(self.wandb_dir, exist_ok=True)
         # ---- Optim ----
         self.last_lr = float(self.ppo_config['learning_rate'])
         self.weight_decay = self.ppo_config.get('weight_decay', 0.0)
@@ -93,12 +94,21 @@ class PPO(object):
         # ---- Snapshot
         self.save_freq = self.ppo_config['save_frequency']
         self.save_best_after = self.ppo_config['save_best_after']
-        # ---- Tensorboard Logger ----
+        # ---- wandb Logger ----
         self.extra_info = {}
         self.episode_reward_batches = {term: [] for term in EPISODE_REWARD_TERMS}
+        self.writer = None
         if create_output_dir:
-            writer = SummaryWriter(self.tb_dif)
-            self.writer = writer
+            run_name, group = run_identity(
+                self.output_dir, self.ppo_config['experiment_name'], 'stage1'
+            )
+            self.writer = WandbWriter(
+                log_dir=self.wandb_dir,
+                config=full_config_to_dict(full_config),
+                run_name=run_name,
+                group=group,
+                job_type='stage1',
+            )
 
         self.episode_rewards = AverageScalarMeter(100)
         self.episode_lengths = AverageScalarMeter(100)
@@ -209,6 +219,8 @@ class PPO(object):
             print(info_string)
 
         print('max steps achieved')
+        if self.writer is not None:
+            self.writer.close()
 
     def save(self, name):
         weights = {

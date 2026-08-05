@@ -21,6 +21,37 @@ pip install -e .
 ```
 
 # 2. Training
+## 2.0. Configure experiment tracking (wandb)
+Training metrics go to [Weights & Biases](https://wandb.ai). Edit `wandb_config.json` in the repo root:
+```json
+{
+  "api_key": "your-wandb-api-key",
+  "project": "sharpa",
+  "entity": null,
+  "mode": "online",
+  "enabled": true
+}
+```
+```bash
+# INFOℹ️: Get your key from https://wandb.ai/authorize (40 hex characters, no prefix).
+# INFOℹ️: "entity": null uses the account the key belongs to.
+# INFOℹ️: "mode" accepts "online", "offline" or "disabled".
+#         Use "offline" on a machine without internet, then upload later:
+#           wandb sync logs/<experiment>/<timestamp>/stage1_wandb/wandb/offline-run-*
+# INFOℹ️: Set "enabled": false to turn logging off entirely.
+# INFOℹ️: Standard env vars override this file, which is handy for a one-off run:
+#           WANDB_API_KEY=... WANDB_PROJECT=... WANDB_MODE=offline python .../train.py ...
+# INFOℹ️: Point SHARPA_WANDB_CONFIG at another file to keep your key outside the repo.
+```
+Stage 1 and stage 2 of one experiment share a wandb group (`<experiment_name>/<timestamp>`),
+so the PPO run and its distillation run appear together. If wandb is unavailable, training
+prints a warning and continues without logging.
+
+Offline check of the logging path (no simulator or GPU needed):
+```bash
+python tests/test_wandb_logger.py
+```
+
 ## 2.1. Generate grasp cache
 ```bash
 # CAUTION⚠️: Same object scale config will overwrite the older one.
