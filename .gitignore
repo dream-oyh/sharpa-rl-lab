@@ -8,3 +8,4 @@ logs/
 python/
 !pretrained
 eval_data/
+*.mp4
