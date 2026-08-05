@@ -38,9 +38,17 @@ python rl_isaaclab/scripts/train.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --
 
 ## 2.4. Bulb ring task
 The ring task keeps the bulb fully free under gravity and uses a physical guide
-collider instead of a revolute joint.
+collider instead of a revolute joint. It uses the 60 x 109 mm physical E27 mesh
+from `assets/Bulb/e27_bulb_new`, three 25 mm thread contact rings, and a socket
+guide with 27 mm inner diameter, 36 mm outer diameter, and 18 mm height. The
+bulb mass is fixed at 33.6 g during training and play.
 
 ```bash
+# Rebuild the five-scale cache for the physical E27 collision geometry.
+python rl_isaaclab/scripts/gen_grasp.py \
+  --task Isaac-Inhand-Rotate-Grasp-Sharpa-Wave-Bulb-New-v0 \
+  --headless --device cuda:0 --num_envs 8192
+
 # Validate the ring asset, reward terms, gravity, collision, and scale matching.
 python rl_isaaclab/scripts/smoke_test_bulb_ring.py --headless --device cuda:0
 

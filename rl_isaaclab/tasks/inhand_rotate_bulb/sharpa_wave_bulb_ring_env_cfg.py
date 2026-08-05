@@ -18,13 +18,17 @@ class SharpaWaveBulbRingEnvCfg(SharpaWaveBulbSocketEnvCfg):
     # with weak gravity and the base environment ramps it toward 10 m/s^2 once
     # the bulb remains inside the task's height bounds reliably.
     gravity_curriculum = True
+    socket_grasp_cache_file = (
+        "cache/sharpa_bulb_new_grasp_high_1p0_angle25_0.7-1.1-5.npy"
+    )
+    randomize_mass = False
 
     socket_anchor_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/socket_anchor",
         spawn=sim_utils.UsdFileCfg(
             usd_path=os.path.join(
                 os.path.dirname(os.path.abspath(__file__)),
-                "../../../assets/Bulb/E27_socket_guide.usda",
+                "../../../assets/Bulb/e27_bulb_new/E27_socket_guide.usda",
             ),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
@@ -34,7 +38,7 @@ class SharpaWaveBulbRingEnvCfg(SharpaWaveBulbSocketEnvCfg):
             ),
             collision_props=sim_utils.CollisionPropertiesCfg(
                 collision_enabled=True,
-                contact_offset=0.00075,
+                contact_offset=0.00025,
                 rest_offset=0.0,
             ),
             mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
@@ -52,6 +56,7 @@ class SharpaWaveBulbRingEnvCfg(SharpaWaveBulbSocketEnvCfg):
     rotate_reward_scale = 2.5
     object_linvel_penalty_scale = -0.3
     pos_diff_penalty_scale = -0.4
+    pos_diff_reference_reset_pose = True
     torque_penalty_scale = -0.1
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
@@ -64,9 +69,10 @@ class SharpaWaveBulbRingEnvCfg(SharpaWaveBulbSocketEnvCfg):
         self.sim.gravity = (0.0, 0.0, -0.05)
         self.object_cfg.spawn.usd_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "../../../assets/Bulb/E27_Bulb_ring_collision.usda",
+            "../../../assets/Bulb/e27_bulb_new/E27_bulb_ring_collision.usda",
         )
+        self.object_cfg.spawn.mass_props.mass = 0.0336
         # The original 2 mm contact envelope is large compared with the
         # guide's 0.75--1.0 mm radial clearance.
-        self.object_cfg.spawn.collision_props.contact_offset = 0.00075
+        self.object_cfg.spawn.collision_props.contact_offset = 0.00025
         self.object_cfg.spawn.collision_props.rest_offset = 0.0

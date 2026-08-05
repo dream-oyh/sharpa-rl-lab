@@ -37,6 +37,7 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.num_hand_dofs = self.hand.num_joints
+        self.reset_hand_dof_pos = self.hand.data.default_joint_pos.clone()
 
         self._axes_visualizer = None
         self._object_pos_visualizer = None
@@ -372,7 +373,17 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         object_angvel = axis_angle_from_quat(quat_mul(self.object_rot, quat_conjugate(self.object_rot_prev))) / self.step_dt
         rotate_reward = saturate((object_angvel * self.rot_axis).sum(-1), torch.tensor(self.cfg.angvel_clip_min), torch.tensor(self.cfg.angvel_clip_max))
         object_linvel_penalty = torch.norm(self.object_pos - self.object_pos_prev, p=1, dim=-1) / self.step_dt
-        pos_diff_penalty = ((self.hand_dof_pos[:, self.actuated_dof_indices] - self.hand.data.default_joint_pos[:, self.actuated_dof_indices]) ** 2).sum(-1)
+        if self.cfg.pos_diff_reference_reset_pose:
+            hand_pos_reference = self.reset_hand_dof_pos
+        else:
+            hand_pos_reference = self.hand.data.default_joint_pos
+        pos_diff_penalty = (
+            (
+                self.hand_dof_pos[:, self.actuated_dof_indices]
+                - hand_pos_reference[:, self.actuated_dof_indices]
+            )
+            ** 2
+        ).sum(-1)
         torque_penalty = (self.hand_dof_torque[:, self.actuated_dof_indices] ** 2).sum(-1)
         work_penalty = ((self.hand_dof_torque[:, self.actuated_dof_indices] * self.hand_dof_vel[:, self.actuated_dof_indices]).sum(-1)) ** 2
         object_pos_diff = 1.0 / (torch.norm(self.object_pos - self.object_default_pose.clone()[:, :3], dim=-1) + 0.001)
@@ -559,6 +570,7 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.cur_targets[env_ids] = dof_pos
         self.hand.set_joint_position_target(dof_pos, env_ids=env_ids)
         self.hand.write_joint_state_to_sim(dof_pos, dof_vel, env_ids=env_ids)
+        self.reset_hand_dof_pos[env_ids] = dof_pos
         self._refresh_lab()
         self.object_pos_prev[env_ids] = self.object_pos[env_ids]
         self.object_rot_prev[env_ids] = self.object_rot[env_ids]

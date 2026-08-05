@@ -273,6 +273,9 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     rotate_reward_scale = 2.5            
     object_linvel_penalty_scale = -0.3
     pos_diff_penalty_scale = -0.4
+    # If enabled, penalize motion away from each environment's cache-sampled
+    # reset grasp instead of the hand asset's authored default joint pose.
+    pos_diff_reference_reset_pose = False
     torque_penalty_scale = -0.1
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
