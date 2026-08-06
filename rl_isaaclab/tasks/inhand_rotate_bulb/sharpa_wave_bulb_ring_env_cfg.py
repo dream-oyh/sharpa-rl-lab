@@ -57,7 +57,7 @@ class SharpaWaveBulbRingEnvCfg(SharpaWaveBulbSocketEnvCfg):
     object_linvel_penalty_scale = -0.3
     pos_diff_penalty_scale = -0.4
     pos_diff_reference_reset_pose = True
-    torque_penalty_scale = -0.1
+    torque_penalty_scale = -0.2
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
     object_z_penalty_scale = 0.0
