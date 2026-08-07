@@ -22,9 +22,18 @@ pip install -e .
 
 # 2. Training
 ## 2.1. Generate grasp cache
+
+For a multi-scale grasp task, the generator runs every configured scale in a
+separate process. Each scale therefore uses the full environment count; the
+per-scale files are validated and merged in scale order automatically. Pass
+`--parallel_scales` only to restore the legacy behavior that splits one process
+between all scales.
+
 ```bash
 # CAUTION⚠️: Same object scale config will overwrite the older one.
-python rl_isaaclab/scripts/gen_grasp.py --task Isaac-Inhand-Rotate-Grasp-Sharpa-Wave-v0 --headless
+python rl_isaaclab/scripts/gen_grasp.py \
+  --task Isaac-Inhand-Rotate-Grasp-Sharpa-Wave-v0 \
+  --headless --num_envs 8192
 ```
 ## 2.2. Train the policy
 ```bash
@@ -58,6 +67,37 @@ python rl_isaaclab/scripts/train.py \
   --headless --num_envs 8192
 ```
 
+## 2.5. Align the inverted bulb with world negative Z
+
+First collect a task-specific cache. It samples the complete bulb orientation
+space at scale 1.0 and stores 278 stable grasps in each of eighteen 10-degree
+alignment bins (5004 total). Bulb tilt itself does not reset the collector;
+contact loss and height failures still do.
+
+```bash
+python rl_isaaclab/scripts/gen_grasp.py \
+  --task Isaac-Inhand-Align-Grasp-Sharpa-Wave-Bulb-Up-v0 \
+  --headless --device cuda:0 --num_envs 8192 \
+  env.grasp_cache_size=5004
+```
+
+The training task aligns the bulb's local `+Z` axis with world `(0, 0, -1)`.
+The actor observes the three-component up-axis error in addition to the original
+proprioceptive/tactile observations. Its reset curriculum first trains the
+initial 10-degree angle bin while gravity ramps to `10 m/s^2`. After gravity
+reaches that target, half of resets focus on the newest angle bin and half
+rehearse all earlier bins. One additional 10-degree bin is enabled after at
+least one episode when frontier success is at least 70 percent and the shared
+height-failure condition passes. Sampling returns to uniform over all bins once
+the complete 180-degree range is enabled.
+
+```bash
+python rl_isaaclab/scripts/train.py \
+  --task Isaac-Inhand-Align-Sharpa-Wave-Bulb-Up-v0 \
+  --cache cache/sharpa_bulb_up_align_grasp_uniform_18bins \
+  --headless --device cuda:0 --num_envs 8192
+```
+
 # 3. Visualization
 ## 3.1. Visualize trained policy
 ```bash
@@ -70,6 +110,16 @@ python rl_isaaclab/scripts/play.py --task Isaac-Inhand-Rotate-Sharpa-Wave-v0 --n
 ## 3.3. Visualize bulb grasp cache
 ```bash
 python rl_isaaclab/scripts/visualize_bulb_cache.py --num_envs 16
+```
+
+## 3.4. Plot bulb grasp-cache angle distribution
+
+The default target is world negative Z. Pass `--undirected-axis` only when
+parallel and anti-parallel bulb axes should be treated as equivalent.
+
+```bash
+python rl_isaaclab/scripts/plot_bulb_cache_angles.py \
+  cache/sharpa_bulb_up_align_grasp_uniform_18bins_1.0-1.0-1.npy
 ```
 
 # 4. Deploy

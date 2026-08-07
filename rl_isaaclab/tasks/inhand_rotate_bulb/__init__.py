@@ -42,6 +42,23 @@ gym.register(
 )
 
 gym.register(
+    id="Isaac-Inhand-Align-Grasp-Sharpa-Wave-Bulb-Up-v0",
+    entry_point=(
+        "rl_isaaclab.tasks.inhand_rotate_bulb."
+        "sharpa_wave_bulb_up_align_grasp_env:"
+        "SharpaWaveInhandBulbUpAlignGraspEnv"
+    ),
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.sharpa_wave_bulb_up_align_grasp_env_cfg:"
+            "SharpaWaveBulbUpAlignGraspEnvCfg"
+        ),
+        "agent_cfg_entry_point": f"{agents.__name__}:ppo_cfg.yaml",
+    },
+)
+
+gym.register(
     id="Isaac-Inhand-Rotate-Sharpa-Wave-Bulb-Socket-v0",
     entry_point=(
         "rl_isaaclab.tasks.inhand_rotate_bulb.sharpa_wave_bulb_socket_env:"
@@ -68,5 +85,21 @@ gym.register(
             f"{__name__}.sharpa_wave_bulb_ring_env_cfg:SharpaWaveBulbRingEnvCfg"
         ),
         "agent_cfg_entry_point": f"{agents.__name__}:ppo_ring_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-Inhand-Align-Sharpa-Wave-Bulb-Up-v0",
+    entry_point=(
+        "rl_isaaclab.tasks.inhand_rotate_bulb.sharpa_wave_bulb_up_align_env:"
+        "SharpaWaveInhandBulbUpAlignEnv"
+    ),
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.sharpa_wave_bulb_up_align_env_cfg:"
+            "SharpaWaveBulbUpAlignEnvCfg"
+        ),
+        "agent_cfg_entry_point": f"{agents.__name__}:ppo_up_align_cfg.yaml",
     },
 )

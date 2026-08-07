@@ -18,6 +18,10 @@ class SharpaWaveBulbNewGraspEnvCfg(SharpaWaveBulbGraspEnvCfg):
     seed_grasp_cache_file = (
         "cache/sharpa_bulb_grasp_high_1p0_angle25_0.7-1.1-5.npy"
     )
+    # The sequential grasp launcher sets these fields so a single-scale worker
+    # reads only the matching scale bucket from a multi-scale seed cache.
+    seed_grasp_cache_scale_count = None
+    seed_grasp_cache_scale_id = None
     seed_flexion_offset_range = (0.0, 0.08)
     save_grasp_cache_path = "cache/sharpa_bulb_new_grasp_high_1p0_angle25"
     randomize_mass = False

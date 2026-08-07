@@ -266,7 +266,14 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     object_heading_axis = (1, 0, 0)
     # grasp cache
     grasp_cache_path = None
+    save_grasp_cache_path = None
     grasp_cache_size = 50000
+    # Existing grasp tasks preserve the object's reset orientation. Specialized
+    # collectors can disable this check and balance saved poses by angle.
+    grasp_terminate_on_orientation_deviation = True
+    grasp_angle_bins = 1
+    grasp_angle_target_axis_w = (0.0, 0.0, -1.0)
+    grasp_progress_interval_s = 2.0
     # noise
     joint_noise_scale = 0.02
     # contact

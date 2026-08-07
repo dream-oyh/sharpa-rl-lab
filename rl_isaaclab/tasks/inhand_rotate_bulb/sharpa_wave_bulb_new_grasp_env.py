@@ -30,17 +30,41 @@ class SharpaWaveInhandRotateBulbNewGraspEnv(SharpaWaveInhandRotateGraspEnv):
     ):
         super().__init__(cfg, render_mode, **kwargs)
         seed_cache = np.load(self.cfg.seed_grasp_cache_file, allow_pickle=False)
-        num_scales = int(self.cfg.scale_range[2])
+        configured_seed_scale_count = self.cfg.seed_grasp_cache_scale_count
+        num_seed_scales = (
+            int(self.cfg.scale_range[2])
+            if configured_seed_scale_count is None
+            else int(configured_seed_scale_count)
+        )
         if seed_cache.ndim != 2 or seed_cache.shape[1] != 29:
             raise ValueError(f"Expected seed grasp cache shape (N, 29), got {seed_cache.shape}.")
-        if seed_cache.shape[0] % num_scales != 0:
+        if seed_cache.shape[0] % num_seed_scales != 0:
             raise ValueError(
-                f"Seed cache rows ({seed_cache.shape[0]}) must be divisible by {num_scales}."
+                f"Seed cache rows ({seed_cache.shape[0]}) must be divisible by "
+                f"{num_seed_scales}."
             )
+        self.seed_bucket_size = seed_cache.shape[0] // num_seed_scales
+        fixed_seed_scale_id = self.cfg.seed_grasp_cache_scale_id
+        if fixed_seed_scale_id is not None:
+            fixed_seed_scale_id = int(fixed_seed_scale_id)
+            if not 0 <= fixed_seed_scale_id < num_seed_scales:
+                raise ValueError(
+                    f"seed_grasp_cache_scale_id={fixed_seed_scale_id} is outside "
+                    f"[0, {num_seed_scales})."
+                )
+            start = fixed_seed_scale_id * self.seed_bucket_size
+            seed_cache = seed_cache[start : start + self.seed_bucket_size]
+            self._fixed_seed_scale_id = fixed_seed_scale_id
+        else:
+            if int(self.cfg.scale_range[2]) != num_seed_scales:
+                raise ValueError(
+                    "The active scale count must match the seed-cache scale count "
+                    "unless seed_grasp_cache_scale_id is explicitly selected."
+                )
+            self._fixed_seed_scale_id = None
         self.seed_grasps = torch.as_tensor(
             seed_cache, dtype=torch.float32, device=self.device
         )
-        self.seed_bucket_size = seed_cache.shape[0] // num_scales
         self.gravity_all_directions = [carb.Float3(0.0, 0.0, -9.81)]
         self.seed_flexion_dof_ids = torch.as_tensor(
             [
@@ -60,6 +84,7 @@ class SharpaWaveInhandRotateBulbNewGraspEnv(SharpaWaveInhandRotateGraspEnv):
         print(
             f"[INFO] New-bulb grasp seeds: {self.cfg.seed_grasp_cache_file} | "
             f"rows_per_scale={self.seed_bucket_size} | "
+            f"selected_scale={self._fixed_seed_scale_id} | "
             f"flexion_dofs={len(self.seed_flexion_dof_ids)} | "
             f"closure={self.cfg.seed_flexion_offset_range}",
             flush=True,
@@ -79,7 +104,12 @@ class SharpaWaveInhandRotateBulbNewGraspEnv(SharpaWaveInhandRotateGraspEnv):
             resolved_env_ids = torch.as_tensor(
                 env_ids, dtype=torch.long, device=self.device
             )
-        scale_ids = self.scale_ids[resolved_env_ids].squeeze(-1).long()
+        if self._fixed_seed_scale_id is None:
+            scale_ids = self.scale_ids[resolved_env_ids].squeeze(-1).long()
+        else:
+            scale_ids = torch.zeros(
+                len(resolved_env_ids), dtype=torch.long, device=self.device
+            )
         row_in_bucket = torch.randint(
             self.seed_bucket_size,
             (len(resolved_env_ids),),

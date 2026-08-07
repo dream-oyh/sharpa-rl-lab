@@ -39,6 +39,12 @@ parser.add_argument(
     help="Print the object's world-frame and rotation-axis angular velocities.",
 )
 parser.add_argument(
+    "--disable_object_pos_error_obs",
+    action="store_true",
+    default=False,
+    help="Disable object position error in policy observations for old checkpoints.",
+)
+parser.add_argument(
     "--angvel_print_interval",
     type=int,
     default=20,
@@ -115,6 +121,11 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     agent_cfg["load_path"] = args_cli.load_path if args_cli.load_path is not None else agent_cfg["load_path"]
     if args_cli.reset_random_quat is not None:
         env_cfg.reset_random_quat = args_cli.reset_random_quat
+    if args_cli.disable_object_pos_error_obs and getattr(
+        env_cfg, "include_object_pos_error_in_policy_obs", False
+    ):
+        env_cfg.include_object_pos_error_in_policy_obs = False
+        env_cfg.observation_space = int(env_cfg.observation_space) - 9
     env_cfg.randomize_pd_gains = False
     env_cfg.randomize_friction = True
     env_cfg.randomize_com = False

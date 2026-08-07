@@ -13,12 +13,19 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 
 from isaaclab.app import AppLauncher
 
 
 parser = argparse.ArgumentParser(description="Visualize sampled bulb grasp-cache poses.")
+parser.add_argument(
+    "--task",
+    type=str,
+    default="Isaac-Inhand-Rotate-Sharpa-Wave-Bulb-v0",
+    help="Bulb task/config used to construct the visualization scene.",
+)
 parser.add_argument("--num_envs", type=int, default=16, help="Number of cache samples/environments to show.")
 parser.add_argument(
     "--cache",
@@ -53,11 +60,21 @@ import torch
 
 import rl_isaaclab.tasks.inhand_rotate_bulb  # noqa: F401
 from rl_isaaclab.tasks.inhand_rotate_bulb.sharpa_wave_bulb_env_cfg import SharpaWaveBulbEnvCfg
+from rl_isaaclab.tasks.inhand_rotate_bulb.sharpa_wave_bulb_up_align_env_cfg import (
+    SharpaWaveBulbUpAlignEnvCfg,
+)
 
 
-TASK_NAME = "Isaac-Inhand-Rotate-Sharpa-Wave-Bulb-v0"
 CACHE_STATE_DIM = 29
 HAND_DOF_DIM = 22
+TASK_CONFIGS = {
+    "Isaac-Inhand-Rotate-Sharpa-Wave-Bulb-v0": SharpaWaveBulbEnvCfg,
+    "Isaac-Inhand-Align-Sharpa-Wave-Bulb-Up-v0": SharpaWaveBulbUpAlignEnvCfg,
+}
+SCALE_SUFFIX_RE = re.compile(
+    r"_([-+]?(?:\d+(?:\.\d*)?|\.\d+))"
+    r"-([-+]?(?:\d+(?:\.\d*)?|\.\d+))-(\d+)\.npy$"
+)
 
 
 def _validate_args() -> None:
@@ -75,19 +92,28 @@ def _validate_args() -> None:
 
 def _resolve_cache(cfg: SharpaWaveBulbEnvCfg) -> tuple[str, str]:
     """Return ``(cache_prefix, cache_file)`` accepted by both the env and NumPy."""
-    scale_lower, scale_upper, scale_count = cfg.scale_range
-    suffix = f"_{scale_lower}-{scale_upper}-{scale_count}.npy"
     requested_path = os.path.abspath(os.path.expanduser(args_cli.cache))
 
     if requested_path.endswith(".npy"):
-        if not requested_path.endswith(suffix):
+        match = SCALE_SUFFIX_RE.search(requested_path)
+        if match is None:
             raise ValueError(
-                f"Cache file must end with '{suffix}' for scale_range={cfg.scale_range}; "
-                f"got '{requested_path}'."
+                "A complete cache path must end in "
+                "'_LOWER-UPPER-COUNT.npy'; got "
+                f"'{requested_path}'."
             )
+        scale_range = [
+            float(match.group(1)),
+            float(match.group(2)),
+            int(match.group(3)),
+        ]
+        cfg.scale_range = scale_range
+        cfg.events.randomize_scale.params["scale_range"] = scale_range
         cache_file = requested_path
-        cache_prefix = requested_path[: -len(suffix)]
+        cache_prefix = requested_path[: match.start()]
     else:
+        scale_lower, scale_upper, scale_count = cfg.scale_range
+        suffix = f"_{scale_lower}-{scale_upper}-{scale_count}.npy"
         cache_prefix = requested_path
         cache_file = f"{cache_prefix}{suffix}"
 
@@ -161,7 +187,11 @@ def _write_cache_poses(raw_env, sampled_states: torch.Tensor) -> None:
 def main() -> None:
     _validate_args()
 
-    cfg = SharpaWaveBulbEnvCfg()
+    cfg_type = TASK_CONFIGS.get(args_cli.task)
+    if cfg_type is None:
+        supported = ", ".join(sorted(TASK_CONFIGS))
+        raise ValueError(f"Unsupported --task '{args_cli.task}'. Choose one of: {supported}")
+    cfg = cfg_type()
     cache_prefix, cache_file = _resolve_cache(cfg)
     sampled_cache, sample_indices = _sample_cache(cache_file)
 
@@ -194,7 +224,7 @@ def main() -> None:
 
     env = None
     try:
-        env = gym.make(TASK_NAME, cfg=cfg, render_mode=None)
+        env = gym.make(args_cli.task, cfg=cfg, render_mode=None)
         raw_env = env.unwrapped
         env.reset(seed=args_cli.seed)
 
