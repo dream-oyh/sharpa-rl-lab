@@ -16,6 +16,12 @@ parser.add_argument("--num_envs", type=int, default=16, help="Number of environm
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=42, help="Seed used for the environment")
 parser.add_argument("--cache", type=str, default=None, help="Cache path.")
+parser.add_argument(
+    "--bulb_model",
+    choices=("original", "old", "new"),
+    default=None,
+    help="Bulb asset model to load for bulb tasks.",
+)
 parser.add_argument("--load_path", type=str, default=None, help="Checkpoint path.")
 parser.add_argument("--max_agent_steps", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--algorithm", type=str, default=None, help="Run training with multiple GPUs or nodes.")
@@ -119,6 +125,12 @@ def main(env_cfg: DirectRLEnvCfg, agent_cfg: dict):
     agent_cfg["device"] = args_cli.device if args_cli.device is not None else agent_cfg["device"]
     agent_cfg["algo"] = args_cli.algorithm if args_cli.algorithm is not None else agent_cfg["algo"]
     agent_cfg["load_path"] = args_cli.load_path if args_cli.load_path is not None else agent_cfg["load_path"]
+    if args_cli.bulb_model is not None:
+        if not hasattr(env_cfg, "set_bulb_model"):
+            raise ValueError(
+                f"--bulb_model is only supported by bulb tasks, got task {args_cli.task!r}."
+            )
+        env_cfg.set_bulb_model(args_cli.bulb_model)
     if args_cli.reset_random_quat is not None:
         env_cfg.reset_random_quat = args_cli.reset_random_quat
     if args_cli.disable_object_pos_error_obs and getattr(
