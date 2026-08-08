@@ -48,6 +48,8 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
                 "alignment_reward_zero_angle must be greater than "
                 "alignment_success_tolerance."
             )
+        if self.cfg.alignment_position_tolerance <= 0.0:
+            raise ValueError("alignment_position_tolerance must be positive.")
         self._alignment_success_cosine = math.cos(
             self.cfg.alignment_success_tolerance
         )
@@ -515,8 +517,16 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             )
             ** 2
         ).sum(dim=-1)
+        object_pos_error = torch.linalg.vector_norm(
+            self.object_pos - self.object_default_pose[:, :3], dim=-1
+        )
+        object_base_z = self.object_pos[:, 2]
+        object_base_z_low_error = torch.clamp(
+            float(self.cfg.object_base_z_min) - object_base_z,
+            min=0.0,
+        )
         object_z_diff = torch.abs(
-            self.object_pos[:, 2] - self.object_default_pose[:, 2]
+            object_base_z - self.object_default_pose[:, 2]
         )
 
         object_tip_local_pos = torch.tensor(
@@ -539,6 +549,13 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             min=0.0,
             max=1.0,
         )
+        position_score = torch.clamp(
+            1.0
+            - object_pos_error / float(self.cfg.alignment_position_tolerance),
+            min=0.0,
+            max=1.0,
+        )
+        gated_position_score = alignment_score * position_score
         completion_bonus = (
             self._alignment_just_completed.float()
             * self.cfg.alignment_completion_bonus
@@ -556,12 +573,18 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             "torque_penalty": zero_reward.clone(),
             "work_penalty": zero_reward.clone(),
             "object_pos_diff": zero_reward.clone(),
-            "object_z_penalty": zero_reward.clone(),
+            "position_reward": (
+                gated_position_score * self.cfg.object_pos_reward_scale
+            ),
+            "object_z_penalty": (
+                -object_base_z_low_error.square()
+                * self.cfg.object_base_z_low_penalty_scale
+            ),
             "object_tip_z_penalty": zero_reward.clone(),
             "object_up_alignment_reward": (
                 alignment_score * self.cfg.object_up_alignment_reward_scale
-                + completion_bonus
             ),
+            "success_reward": completion_bonus,
         }
         total_reward = torch.stack(tuple(reward_terms.values()), dim=0).sum(dim=0)
         reward_terms["total_reward"] = total_reward
@@ -572,6 +595,9 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
 
         self.extras["alignment_error_deg"] = torch.rad2deg(alignment_angle).mean()
         self.extras["up_alignment"] = up_alignment.mean()
+        self.extras["object_pos_error"] = object_pos_error.mean()
+        self.extras["object_base_z"] = object_base_z.mean()
+        self.extras["object_base_z_low_error"] = object_base_z_low_error.mean()
         self.extras["object_z_diff"] = object_z_diff.mean()
         self.extras["object_tip_z_diff"] = object_tip_z_diff.mean()
         self.extras["gravity_x"] = self.physics_sim_view.get_gravity()[0]

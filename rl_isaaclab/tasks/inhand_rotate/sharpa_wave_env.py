@@ -408,11 +408,13 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             "torque_penalty": torque_penalty * self.cfg.torque_penalty_scale,
             "work_penalty": work_penalty * self.cfg.work_penalty_scale,
             "object_pos_diff": object_pos_diff * self.cfg.object_pos_reward_scale,
+            "position_reward": torch.zeros_like(rotate_reward),
             "object_z_penalty": object_z_penalty * self.cfg.object_z_penalty_scale,
             "object_tip_z_penalty": object_tip_z_penalty * self.cfg.object_tip_z_penalty_scale,
             "object_up_alignment_reward": (
                 object_up_alignment_reward * self.cfg.object_up_alignment_reward_scale
             ),
+            "success_reward": torch.zeros_like(rotate_reward),
         }
         total_reward = torch.stack(tuple(reward_terms.values()), dim=0).sum(dim=0)
         reward_terms["total_reward"] = total_reward

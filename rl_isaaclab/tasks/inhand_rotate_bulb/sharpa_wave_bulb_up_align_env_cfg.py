@@ -64,6 +64,8 @@ class SharpaWaveBulbUpAlignEnvCfg(SharpaWaveBulbEnvCfg):
     alignment_completion_bonus = 10.0
     alignment_success_tolerance = 5.0 / 180.0 * math.pi
     alignment_success_hold_steps = 10
+    # Root-position distance is measured in XYZ from the sampled reset pose.
+    alignment_position_tolerance = 0.02
     # The normalized dense alignment reward reaches zero at this error.
     alignment_reward_zero_angle = 25.0 / 180.0 * math.pi
 
@@ -75,10 +77,13 @@ class SharpaWaveBulbUpAlignEnvCfg(SharpaWaveBulbEnvCfg):
     pos_diff_reference_reset_pose = False
     torque_penalty_scale = 0.0
     work_penalty_scale = 0.0
+    # Position reward stays disabled by default; base height is handled below.
     object_pos_reward_scale = 0.0
+    # Keep the bulb base high enough for the downstream in-hand rotation task.
+    # This is a base/root-z hinge penalty, not a top/tip-height target.
+    object_base_z_min = 0.61906
+    object_base_z_low_penalty_scale = 20.0
     object_z_penalty_scale = 0.0
-    # Changing tilt necessarily changes the bulb tip height, so the old
-    # tip-height preservation cost would directly oppose this task.
     object_tip_z_penalty_scale = 0.0
 
     debug_show_object_vectors = False
