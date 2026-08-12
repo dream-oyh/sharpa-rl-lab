@@ -35,6 +35,9 @@ class SharpaWaveBulbUpAlignEnvCfg(SharpaWaveBulbEnvCfg):
     reset_height_upper = 0.67906
 
     grasp_cache_path = "cache/sharpa_bulb_up_align_grasp_uniform_18bins"
+    # Let freshly restored cache grasps rebuild contacts before the policy
+    # sees the first reset observation.
+    reset_settle_physics_steps = 6
 
     # Avoid spending most rollouts on cache poses which already satisfy the
     # task. Filtering preserves an equal number of rows in every scale bucket.
@@ -46,6 +49,7 @@ class SharpaWaveBulbUpAlignEnvCfg(SharpaWaveBulbEnvCfg):
     # 10-second episode before the shared height-failure condition is checked.
     up_angle_curriculum = True
     up_angle_curriculum_total_bins = 18
+    up_angle_curriculum_angle_max = math.pi
     up_angle_curriculum_initial_bins = 1
     up_angle_curriculum_bins_per_step = 1
     up_angle_curriculum_min_stage_steps = 200
@@ -53,6 +57,9 @@ class SharpaWaveBulbUpAlignEnvCfg(SharpaWaveBulbEnvCfg):
     up_angle_curriculum_frontier_fraction = 0.5
     up_angle_curriculum_success_threshold = 0.7
     up_angle_curriculum_min_frontier_episodes = 1024
+    # Optional play/eval override.  If set, resets sample only from the bin
+    # containing this Up-angle value instead of following the curriculum.
+    up_angle_curriculum_fixed_angle_deg = None
 
     # Unclipped potential difference: decreasing the alignment angle is
     # rewarded and increasing it is penalized.  Since it telescopes across a
@@ -97,12 +104,11 @@ class SharpaWaveBulbUpAlignEnvCfg(SharpaWaveBulbEnvCfg):
     alignment_angle_text_box_height = 32
 
     def __post_init__(self):
-        # Close-up view of the hand and bulb in environment zero. Using the env
-        # frame keeps it centered when play creates a grid of environments.
-        self.viewer.origin_type = "env"
+        # Wide view centered on the default 4x4 play grid.
+        self.viewer.origin_type = "world"
         self.viewer.env_index = 0
-        self.viewer.eye = (0.35, -0.35, 0.85)
-        self.viewer.lookat = (-0.09559, -0.00517, 0.63906)
+        self.viewer.eye = (3.2, -2.4, 2.4)
+        self.viewer.lookat = (0.75, 1.12, 0.64)
         self.viewer.resolution = (1280, 720)
         self.object_cfg.spawn.usd_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),

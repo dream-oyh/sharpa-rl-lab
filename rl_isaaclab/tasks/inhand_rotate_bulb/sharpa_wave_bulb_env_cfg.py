@@ -74,8 +74,8 @@ class SharpaWaveBulbEnvCfg(SharpaWaveEnvCfg):
     object_up_axis = (0, 0, 1)
     object_heading_axis = (1, 0, 0)
     object_up_alignment_reward_scale = 0.25
-    reset_height_lower = 0.61906
-    reset_height_upper = 0.65906
+    reset_height_lower = 0.59906
+    reset_height_upper = 0.67906
     reset_angle_diff = 25 / 180 * math.pi
     debug_show_object_pos = True
 

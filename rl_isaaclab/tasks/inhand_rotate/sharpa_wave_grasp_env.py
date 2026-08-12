@@ -27,6 +27,11 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
             raise ValueError(
                 f"grasp_angle_bins must be positive, got {self._grasp_angle_bins}."
             )
+        self._grasp_angle_max = float(getattr(self.cfg, "grasp_angle_max", torch.pi))
+        if self._grasp_angle_max <= 0.0:
+            raise ValueError(
+                f"grasp_angle_max must be positive, got {self._grasp_angle_max}."
+            )
         num_cache_buckets = int(self.cfg.scale_range[2]) * self._grasp_angle_bins
         self.saved_grasping_states = [
             torch.zeros((0, 29), dtype=torch.float32, device=self.device)
@@ -96,8 +101,12 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
             grasp_angles = torch.acos(
                 torch.clamp((object_up_w * target_axis_w).sum(dim=-1), -1.0, 1.0)
             )
+            angle_valid = grasp_angles <= self._grasp_angle_max + 1.0e-6
+            all_states = all_states[angle_valid]
+            saved_scale_ids = saved_scale_ids[angle_valid]
+            grasp_angles = grasp_angles[angle_valid]
             saved_angle_ids = torch.floor(
-                grasp_angles / torch.pi * self._grasp_angle_bins
+                grasp_angles / self._grasp_angle_max * self._grasp_angle_bins
             ).long().clamp_max(self._grasp_angle_bins - 1)
         else:
             saved_angle_ids = torch.zeros_like(saved_scale_ids)

@@ -40,7 +40,8 @@ class SharpaWaveInhandBulbUpAlignGraspEnv(
         )
         print(
             "[INFO] Bulb up-alignment grasp sampling: "
-            f"{self._grasp_angle_bins} equal angle bins over [0, 180] deg | "
+            f"{self._grasp_angle_bins} equal angle bins over "
+            f"[0, {torch.rad2deg(torch.tensor(self._grasp_angle_max)).item():.0f}] deg | "
             "axial roll over [0, 360) deg | orientation tilt does not reset",
             flush=True,
         )
@@ -51,7 +52,7 @@ class SharpaWaveInhandBulbUpAlignGraspEnv(
         """Sample full rotations with equal probability in every angle bin."""
         count = len(env_ids)
         angle_bin_ids = self._reset_angle_bin_ids[env_ids]
-        angle_bin_width = torch.pi / self._grasp_angle_bins
+        angle_bin_width = self._grasp_angle_max / self._grasp_angle_bins
         target_angle = (
             angle_bin_ids.float() + torch.rand(count, device=self.device)
         ) * angle_bin_width

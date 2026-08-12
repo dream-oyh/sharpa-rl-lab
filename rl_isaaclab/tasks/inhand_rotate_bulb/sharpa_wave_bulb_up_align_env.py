@@ -66,15 +66,19 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             self.num_envs, dtype=torch.bool, device=self.device
         )
         self._filter_initial_alignment_cache()
-        self._setup_up_angle_curriculum()
+        if self.cfg.up_angle_curriculum:
+            self._setup_up_angle_curriculum()
         self._setup_alignment_angle_labels()
 
     def _setup_up_angle_curriculum(self) -> None:
         """Index the grasp cache by final Up-alignment angle."""
         total_bins = int(self.cfg.up_angle_curriculum_total_bins)
         initial_bins = int(self.cfg.up_angle_curriculum_initial_bins)
+        angle_max = float(self.cfg.up_angle_curriculum_angle_max)
         if total_bins <= 0:
             raise ValueError("up_angle_curriculum_total_bins must be positive.")
+        if angle_max <= 0.0:
+            raise ValueError("up_angle_curriculum_angle_max must be positive.")
         if not 1 <= initial_bins <= total_bins:
             raise ValueError(
                 "up_angle_curriculum_initial_bins must be in "
@@ -99,6 +103,7 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
 
         num_scales = int(self.cfg.scale_range[2])
         self._up_angle_cache_indices = []
+        self._up_angle_cache_angles = []
         for scale_id in range(num_scales):
             start = scale_id * self.bucket_grasp
             stop = start + self.bucket_grasp
@@ -106,11 +111,23 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             angles = self._alignment_angle(
                 self.saved_grasping_states[start:stop, 25:29]
             )
+            valid_angle = angles <= angle_max
+            cache_indices = cache_indices[valid_angle]
+            angles = angles[valid_angle]
+            if len(cache_indices) == 0:
+                raise ValueError(
+                    f"Scale bucket {scale_id} has no cache poses with Up-angle "
+                    f"<= {math.degrees(angle_max):g} deg."
+                )
             angle_bin_ids = torch.floor(
-                angles / torch.pi * total_bins
+                angles / angle_max * total_bins
             ).long().clamp_max(total_bins - 1)
             scale_bins = [
                 cache_indices[angle_bin_ids == angle_bin_id]
+                for angle_bin_id in range(total_bins)
+            ]
+            scale_angle_bins = [
+                angles[angle_bin_ids == angle_bin_id]
                 for angle_bin_id in range(total_bins)
             ]
             empty_bins = [
@@ -124,6 +141,14 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
                     f"bins {empty_bins}."
                 )
             self._up_angle_cache_indices.append(scale_bins)
+            self._up_angle_cache_angles.append(scale_angle_bins)
+            print(
+                "[INFO] Up-angle curriculum cache filter: "
+                f"scale_bucket={scale_id} kept={len(cache_indices)}/"
+                f"{stop - start} poses with angle <= "
+                f"{math.degrees(angle_max):g} deg",
+                flush=True,
+            )
 
         self._up_angle_curriculum_bins = initial_bins
         self._up_angle_curriculum_gravity_ready = False
@@ -138,12 +163,26 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
         print(
             "[INFO] Up-angle curriculum: gravity first | "
             f"active_bins={initial_bins}/{total_bins} | "
-            f"initial_max_angle={180.0 * initial_bins / total_bins:g} deg | "
+            f"initial_max_angle={math.degrees(angle_max) * initial_bins / total_bins:g} deg | "
+            f"angle_max={math.degrees(angle_max):g} deg | "
             f"frontier_fraction={frontier_fraction:.2f} | "
             f"success_threshold={success_threshold:.2f} | "
             f"min_stage_steps={self.cfg.up_angle_curriculum_min_stage_steps}",
             flush=True,
         )
+        fixed_angle_deg = getattr(self.cfg, "up_angle_curriculum_fixed_angle_deg", None)
+        if fixed_angle_deg is not None:
+            fixed_angle = max(0.0, min(math.radians(float(fixed_angle_deg)), angle_max))
+            fixed_bin = min(
+                int(math.floor(fixed_angle / angle_max * total_bins)),
+                total_bins - 1,
+            )
+            print(
+                "[INFO] Up-angle reset override: "
+                f"requested={float(fixed_angle_deg):g} deg | "
+                f"sampling_bin={fixed_bin}/{total_bins - 1}",
+                flush=True,
+            )
 
     def _sample_grasp_cache_rows(self, env_ids: torch.Tensor) -> torch.Tensor:
         """Focus reset sampling on the frontier while rehearsing easier bins."""
@@ -152,7 +191,17 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
 
         active_bins = int(self._up_angle_curriculum_bins)
         total_bins = int(self.cfg.up_angle_curriculum_total_bins)
-        if active_bins >= total_bins:
+        fixed_angle_deg = getattr(self.cfg, "up_angle_curriculum_fixed_angle_deg", None)
+        if fixed_angle_deg is not None:
+            angle_max = float(self.cfg.up_angle_curriculum_angle_max)
+            fixed_angle = max(0.0, min(math.radians(float(fixed_angle_deg)), angle_max))
+            fixed_bin = int(math.floor(fixed_angle / angle_max * total_bins))
+            fixed_bin = min(fixed_bin, total_bins - 1)
+            sampled_angle_bins = torch.full(
+                (len(env_ids),), fixed_bin, dtype=torch.long, device=self.device
+            )
+            active_bins = total_bins
+        elif active_bins >= total_bins:
             # Once the curriculum is complete, restore a uniform distribution
             # over the entire angle range.
             sampled_angle_bins = torch.randint(
@@ -187,6 +236,16 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
                 if count == 0:
                     continue
                 candidates = self._up_angle_cache_indices[scale_id][angle_bin_id]
+                if fixed_angle_deg is not None:
+                    candidate_angles = self._up_angle_cache_angles[scale_id][
+                        angle_bin_id
+                    ]
+                    half_bin_width = 0.5 * float(
+                        self.cfg.up_angle_curriculum_angle_max
+                    ) / total_bins
+                    near_target = torch.abs(candidate_angles - fixed_angle) <= half_bin_width
+                    if near_target.any():
+                        candidates = candidates[near_target]
                 choices = torch.randint(
                     0, len(candidates), size=(count,), device=self.device
                 )
@@ -218,6 +277,7 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
     def _update_up_angle_curriculum(self) -> None:
         """Expand reset-angle bins after gravity training has completed."""
         total_bins = int(self.cfg.up_angle_curriculum_total_bins)
+        angle_max = float(self.cfg.up_angle_curriculum_angle_max)
         active_bins = int(self._up_angle_curriculum_bins)
         gravity = self.physics_sim_view.get_gravity()
         gravity_magnitude = math.sqrt(
@@ -232,7 +292,7 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
 
         self.extras["up_angle_curriculum_bins"] = float(active_bins)
         self.extras["up_angle_curriculum_max_deg"] = (
-            180.0 * active_bins / total_bins
+            math.degrees(angle_max) * active_bins / total_bins
         )
         self.extras["up_angle_curriculum_gravity_ready"] = float(gravity_ready)
         frontier_episodes = self._up_angle_curriculum_frontier_episodes
@@ -303,7 +363,9 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             self.common_step_counter
         )
         max_angle = (
-            180.0 * self._up_angle_curriculum_bins / total_bins
+            math.degrees(float(self.cfg.up_angle_curriculum_angle_max))
+            * self._up_angle_curriculum_bins
+            / total_bins
         )
         self.extras["up_angle_curriculum_bins"] = float(
             self._up_angle_curriculum_bins
@@ -619,9 +681,52 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             aligned & ~self._alignment_completed & ~failed
         )
         self._alignment_completed |= self._alignment_just_completed
-        self._record_up_angle_frontier_episodes(failed | time_out)
-        self._update_up_angle_curriculum()
+        if self.cfg.up_angle_curriculum:
+            self._record_up_angle_frontier_episodes(failed | time_out)
+            self._update_up_angle_curriculum()
         return failed, time_out
+
+    def _settle_reset_states(self, env_ids: torch.Tensor) -> None:
+        settle_steps = max(int(self.cfg.reset_settle_physics_steps), 0)
+        if settle_steps == 0 or len(env_ids) == 0:
+            return
+
+        for _ in range(settle_steps):
+            self._refresh_lab()
+            if self.cfg.torque_control:
+                torques = (
+                    self.p_gain[env_ids]
+                    * (self.cur_targets[env_ids] - self.hand_dof_pos[env_ids])
+                    - self.d_gain[env_ids] * self.hand_dof_vel[env_ids]
+                )
+                self.hand.set_joint_effort_target(
+                    torques[:, self.actuated_dof_indices],
+                    joint_ids=self.actuated_dof_indices,
+                    env_ids=env_ids,
+                )
+            else:
+                self.hand.set_joint_position_target(
+                    self.cur_targets[env_ids][:, self.actuated_dof_indices],
+                    joint_ids=self.actuated_dof_indices,
+                    env_ids=env_ids,
+                )
+            self.scene.write_data_to_sim()
+            self.sim.step(render=False)
+            self.scene.update(dt=self.physics_dt)
+
+        zero_root_velocity = torch.zeros((len(env_ids), 6), device=self.device)
+        self.object.write_root_velocity_to_sim(zero_root_velocity, env_ids=env_ids)
+        self.hand.write_root_velocity_to_sim(zero_root_velocity, env_ids=env_ids)
+        self.hand.write_joint_state_to_sim(
+            self.hand.data.joint_pos[env_ids].clone(),
+            torch.zeros_like(self.hand.data.joint_vel[env_ids]),
+            env_ids=env_ids,
+        )
+        self.hand.set_joint_position_target(self.cur_targets[env_ids], env_ids=env_ids)
+        self.scene.write_data_to_sim()
+        self.sim.forward()
+        self.scene.update(dt=0.0)
+        self._refresh_lab()
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         super()._reset_idx(env_ids)
@@ -630,12 +735,15 @@ class SharpaWaveInhandBulbUpAlignEnv(SharpaWaveInhandRotateEnv):
             if env_ids is None
             else torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
         )
+        self._settle_reset_states(resolved_env_ids)
 
         # Anchor translation rewards at the sampled cache pose while retaining
         # the fixed world negative-Z orientation target.
         self.object_default_pose[resolved_env_ids, :3] = self.object_pos[
             resolved_env_ids
         ]
+        self.object_pos_prev[resolved_env_ids] = self.object_pos[resolved_env_ids]
+        self.object_rot_prev[resolved_env_ids] = self.object_rot[resolved_env_ids]
         if hasattr(self, "_success_hold_count"):
             self._success_hold_count[resolved_env_ids] = 0
         if hasattr(self, "_alignment_just_completed"):

@@ -1,7 +1,9 @@
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Grasp-cache configuration for full-orientation bulb up alignment."""
+"""Grasp-cache configuration for bulb up alignment."""
+
+import math
 
 from isaaclab.utils import configclass
 
@@ -12,7 +14,7 @@ from .sharpa_wave_bulb_new_grasp_env_cfg import SharpaWaveBulbNewGraspEnvCfg
 
 @configclass
 class SharpaWaveBulbUpAlignGraspEnvCfg(SharpaWaveBulbNewGraspEnvCfg):
-    """Collect stable bulb grasps evenly across the complete angle range."""
+    """Collect stable bulb grasps evenly across the lower up-angle range."""
 
     # Validate this collector at the physical-size scale first.  Define a new
     # event instance so changing this task cannot mutate another task's config.
@@ -24,10 +26,10 @@ class SharpaWaveBulbUpAlignGraspEnvCfg(SharpaWaveBulbNewGraspEnvCfg):
     # and root-height failures still reset the environment.
     grasp_terminate_on_orientation_deviation = False
 
-    # One scale x eighteen 10-degree bins x 278 stable poses per bucket.  5004
-    # is the nearest total at or above 5000 that divides evenly across 18 bins.
-    grasp_angle_bins = 18
-    grasp_cache_size = 5004
+    # One scale x nine 10-degree bins x 278 stable poses per bucket.
+    grasp_angle_bins = 9
+    grasp_angle_max = 0.5 * math.pi
+    grasp_cache_size = 2502
     grasp_angle_target_axis_w = (0.0, 0.0, -1.0)
     seed_grasp_cache_file = (
         "cache/sharpa_bulb_new_grasp_high_1p0_angle25_0.7-1.1-5.npy"
@@ -35,7 +37,7 @@ class SharpaWaveBulbUpAlignGraspEnvCfg(SharpaWaveBulbNewGraspEnvCfg):
     # Scale 1.0 is bucket 3 in the five-scale [0.7, ..., 1.1] seed cache.
     seed_grasp_cache_scale_count = 5
     seed_grasp_cache_scale_id = 3
-    save_grasp_cache_path = "cache/sharpa_bulb_up_align_grasp_uniform_18bins"
+    save_grasp_cache_path = "cache/sharpa_bulb_up_align_grasp_uniform_0_90_9bins"
 
     # Small translation diversity helps arbitrary orientations settle into
     # nearby valid grasps instead of testing only one object-root position.
