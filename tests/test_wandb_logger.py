@@ -141,9 +141,11 @@ REWARD_TERMS = [
     "torque_penalty",
     "work_penalty",
     "object_pos_diff",
+    "position_reward",
     "object_z_penalty",
     "object_tip_z_penalty",
     "object_up_alignment_reward",
+    "success_reward",
 ]
 
 # Scalars the env puts in `extras`; ppo.play_steps forwards them verbatim as

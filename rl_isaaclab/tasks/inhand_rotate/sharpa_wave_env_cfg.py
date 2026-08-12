@@ -45,6 +45,10 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     priv_info_dim = 8
     include_rup_in_priv_info = False
     include_object_axes_in_priv_info = False
+    # If enabled, append the three-dimensional target-minus-current object up
+    # vector to every policy observation frame. ``observation_space`` must then
+    # be increased by 3 frames * 3 values = 9.
+    include_rup_in_policy_obs = False
     state_space = 0
     asymmetric_obs = False
     # control
@@ -273,6 +277,9 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     rotate_reward_scale = 2.5            
     object_linvel_penalty_scale = -0.3
     pos_diff_penalty_scale = -0.4
+    # If enabled, penalize motion away from each environment's cache-sampled
+    # reset grasp instead of the hand asset's authored default joint pose.
+    pos_diff_reference_reset_pose = False
     torque_penalty_scale = -0.1
     work_penalty_scale = -0.5
     object_pos_reward_scale = 0.003
@@ -280,6 +287,9 @@ class SharpaWaveEnvCfg(DirectRLEnvCfg):
     object_tip_local_pos = (0, 0, 0.05)
     object_tip_z_penalty_scale = 0.0
     object_up_axis = (0, 0, 1)
+    # Optional fixed world-frame target for ``object_up_axis``. When ``None``,
+    # the authored object default orientation defines the target as before.
+    object_target_up_axis_w = None
     object_heading_axis = (1, 0, 0)
     object_up_alignment_reward_scale = 0.0
     # grasp cache

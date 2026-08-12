@@ -37,6 +37,7 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.num_hand_dofs = self.hand.num_joints
+        self.reset_hand_dof_pos = self.hand.data.default_joint_pos.clone()
 
         self._axes_visualizer = None
         self._object_pos_visualizer = None
@@ -372,7 +373,17 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         object_angvel = axis_angle_from_quat(quat_mul(self.object_rot, quat_conjugate(self.object_rot_prev))) / self.step_dt
         rotate_reward = saturate((object_angvel * self.rot_axis).sum(-1), torch.tensor(self.cfg.angvel_clip_min), torch.tensor(self.cfg.angvel_clip_max))
         object_linvel_penalty = torch.norm(self.object_pos - self.object_pos_prev, p=1, dim=-1) / self.step_dt
-        pos_diff_penalty = ((self.hand_dof_pos[:, self.actuated_dof_indices] - self.hand.data.default_joint_pos[:, self.actuated_dof_indices]) ** 2).sum(-1)
+        if self.cfg.pos_diff_reference_reset_pose:
+            hand_pos_reference = self.reset_hand_dof_pos
+        else:
+            hand_pos_reference = self.hand.data.default_joint_pos
+        pos_diff_penalty = (
+            (
+                self.hand_dof_pos[:, self.actuated_dof_indices]
+                - hand_pos_reference[:, self.actuated_dof_indices]
+            )
+            ** 2
+        ).sum(-1)
         torque_penalty = (self.hand_dof_torque[:, self.actuated_dof_indices] ** 2).sum(-1)
         work_penalty = ((self.hand_dof_torque[:, self.actuated_dof_indices] * self.hand_dof_vel[:, self.actuated_dof_indices]).sum(-1)) ** 2
         object_pos_diff = 1.0 / (torch.norm(self.object_pos - self.object_default_pose.clone()[:, :3], dim=-1) + 0.001)
@@ -386,7 +397,7 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         object_up_axis = torch.tensor(self.cfg.object_up_axis, device=self.device, dtype=torch.float32).repeat(self.num_envs, 1)
         object_up_axis = object_up_axis / torch.clamp(torch.norm(object_up_axis, dim=-1, keepdim=True), min=1.0e-6)
         object_up = quat_rotate(self.object_rot, object_up_axis)
-        target_up = quat_rotate(self.object_default_pose[:, 3:7], object_up_axis)
+        target_up = self.object_target_up_w
         up_alignment = torch.clamp((object_up * target_up).sum(-1), -1.0, 1.0)
         object_up_alignment_reward = torch.square((up_alignment + 1.0) / 2.0)
 
@@ -397,11 +408,13 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             "torque_penalty": torque_penalty * self.cfg.torque_penalty_scale,
             "work_penalty": work_penalty * self.cfg.work_penalty_scale,
             "object_pos_diff": object_pos_diff * self.cfg.object_pos_reward_scale,
+            "position_reward": torch.zeros_like(rotate_reward),
             "object_z_penalty": object_z_penalty * self.cfg.object_z_penalty_scale,
             "object_tip_z_penalty": object_tip_z_penalty * self.cfg.object_tip_z_penalty_scale,
             "object_up_alignment_reward": (
                 object_up_alignment_reward * self.cfg.object_up_alignment_reward_scale
             ),
+            "success_reward": torch.zeros_like(rotate_reward),
         }
         total_reward = torch.stack(tuple(reward_terms.values()), dim=0).sum(dim=0)
         reward_terms["total_reward"] = total_reward
@@ -474,6 +487,15 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         rand_scale = torch.where(mask_choice, rand_scale_s, rand_scale_l)
         return rand_scale
 
+    def _sample_grasp_cache_rows(self, env_ids: torch.Tensor) -> torch.Tensor:
+        """Sample reset poses from the active scale bucket for each environment."""
+        sampled_pose_idx = torch.randint(
+            0, self.bucket_grasp, size=(len(env_ids),), device=self.device
+        )
+        sampled_scale_ids = self.scale_ids[env_ids].squeeze(-1).to(torch.long)
+        sampled_cache_idx = sampled_scale_ids * self.bucket_grasp + sampled_pose_idx
+        return self.saved_grasping_states[sampled_cache_idx].clone()
+
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
             env_ids = self.hand._ALL_INDICES
@@ -509,12 +531,7 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
 
         # pose cache
         if self.saved_grasping_states is not None:
-            sampled_pose_idx = torch.randint(
-                0, self.bucket_grasp, size=(len(env_ids),), device=self.device
-            )
-            sampled_scale_ids = self.scale_ids[env_ids].squeeze(-1).to(torch.long)
-            sampled_cache_idx = sampled_scale_ids * self.bucket_grasp + sampled_pose_idx
-            sampled_pose = self.saved_grasping_states[sampled_cache_idx].clone()
+            sampled_pose = self._sample_grasp_cache_rows(env_ids)
         else:
             raise RuntimeError("No saved grasping states found")
         
@@ -559,6 +576,7 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.cur_targets[env_ids] = dof_pos
         self.hand.set_joint_position_target(dof_pos, env_ids=env_ids)
         self.hand.write_joint_state_to_sim(dof_pos, dof_vel, env_ids=env_ids)
+        self.reset_hand_dof_pos[env_ids] = dof_pos
         self._refresh_lab()
         self.object_pos_prev[env_ids] = self.object_pos[env_ids]
         self.object_rot_prev[env_ids] = self.object_rot[env_ids]
@@ -597,7 +615,16 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
             torch.norm(object_heading_axis, dim=-1, keepdim=True), min=1.0e-6
         )
         self.object_up_w = quat_rotate(self.object_rot, object_up_axis)
-        self.object_target_up_w = quat_rotate(self.object_default_pose[:, 3:7], object_up_axis)
+        fixed_target_up = getattr(self.cfg, "object_target_up_axis_w", None)
+        if fixed_target_up is None:
+            self.object_target_up_w = quat_rotate(self.object_default_pose[:, 3:7], object_up_axis)
+        else:
+            target_up = torch.tensor(
+                fixed_target_up, device=self.device, dtype=torch.float32
+            ).expand(self.num_envs, -1)
+            self.object_target_up_w = target_up / torch.clamp(
+                torch.norm(target_up, dim=-1, keepdim=True), min=1.0e-6
+            )
         self.rup = self.object_target_up_w - self.object_up_w
         self.object_heading_w = quat_rotate(self.object_rot, object_heading_axis)
 
@@ -727,6 +754,13 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         cur_tar_buf = self.cur_targets[:, None]
         cur_obs_buf = torch.cat([cur_obs_buf, cur_tar_buf], dim=-1)
         cur_obs_buf = torch.cat([cur_obs_buf, sensed_contacts.clone().unsqueeze(1), contact_pos.clone().unsqueeze(1)], dim=-1)
+        if getattr(self.cfg, "include_rup_in_policy_obs", False):
+            cur_obs_buf = torch.cat([cur_obs_buf, self.rup.clone().unsqueeze(1)], dim=-1)
+        if cur_obs_buf.shape[-1] != self.obs_buf_lag_history.shape[-1]:
+            raise ValueError(
+                "Per-frame policy observation width does not match observation_space / 3: "
+                f"built {cur_obs_buf.shape[-1]}, configured {self.obs_buf_lag_history.shape[-1]}."
+            )
         self.obs_buf_lag_history[:] = torch.cat([prev_obs_buf, cur_obs_buf], dim=1)
 
         # refill the initialized buffers
@@ -739,6 +773,10 @@ class SharpaWaveInhandRotateEnv(DirectRLEnv):
         self.obs_buf_lag_history[at_reset_env_ids, :, 22:44] = self.hand_dof_pos[at_reset_env_ids].unsqueeze(1)
         self.obs_buf_lag_history[at_reset_env_ids, :, 44:49] = sensed_contacts[at_reset_env_ids].unsqueeze(1)
         self.obs_buf_lag_history[at_reset_env_ids, :, 49:64] = contact_pos[at_reset_env_ids].unsqueeze(1)
+        if getattr(self.cfg, "include_rup_in_policy_obs", False):
+            self.obs_buf_lag_history[at_reset_env_ids, :, 64:67] = self.rup[
+                at_reset_env_ids
+            ].unsqueeze(1)
         self.at_reset_buf[at_reset_env_ids] = 0
         obs_buf = (self.obs_buf_lag_history[:, -3:].reshape(self.num_envs, -1)).clone()
 

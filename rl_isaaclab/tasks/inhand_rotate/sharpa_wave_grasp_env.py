@@ -16,13 +16,24 @@ import carb
 from isaaclab.utils.math import quat_conjugate, quat_mul, saturate
 
 from .sharpa_wave_grasp_env_cfg import SharpaWaveEnvCfg
-from .sharpa_wave_env import SharpaWaveInhandRotateEnv
+from .sharpa_wave_env import SharpaWaveInhandRotateEnv, quat_rotate
 
 
 class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
     def __init__(self, cfg: SharpaWaveEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
-        self.saved_grasping_states = [torch.zeros((0, 29), dtype=torch.float32, device=self.device) for _ in range(self.cfg.scale_range[2])]
+        self._grasp_angle_bins = int(self.cfg.grasp_angle_bins)
+        if self._grasp_angle_bins <= 0:
+            raise ValueError(
+                f"grasp_angle_bins must be positive, got {self._grasp_angle_bins}."
+            )
+        num_cache_buckets = int(self.cfg.scale_range[2]) * self._grasp_angle_bins
+        self.saved_grasping_states = [
+            torch.zeros((0, 29), dtype=torch.float32, device=self.device)
+            for _ in range(num_cache_buckets)
+        ]
+        self._grasp_progress_start_time = time.monotonic()
+        self._grasp_last_progress_time = -float("inf")
         self.gravity_id = 0
         self.gravity_all_directions = [
             carb.Float3(0.0, 0.0, 9.81),
@@ -37,9 +48,18 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
         cond1 = (torch.norm(self.fingertip_pos - self.object_pos.unsqueeze(1), dim=-1, p=2) < 0.1).all(-1)
         filtered_force_matrix = torch.cat([self._contact_sensor[id].data.force_matrix_w[:, 0, 0, :].unsqueeze(1) for id in range(10)], dim=1)
         cond2 = (torch.norm(filtered_force_matrix, dim=-1, p=2) > 0.5).sum(-1) >= 3
-        cond3 = torch.less(quat_to_rot(quat_mul(self.object_rot, quat_conjugate(self.object.data.default_root_state.clone()[:, 3:7]))), self.cfg.reset_angle_diff)
-        cond = cond1.float() * cond2.float() * cond3.float()
-        self.reset_buf[cond < 1] = 1
+        cond = cond1 & cond2
+        if self.cfg.grasp_terminate_on_orientation_deviation:
+            orientation_deviation = quat_to_rot(
+                quat_mul(
+                    self.object_rot,
+                    quat_conjugate(
+                        self.object.data.default_root_state.clone()[:, 3:7]
+                    ),
+                )
+            )
+            cond &= orientation_deviation < self.cfg.reset_angle_diff
+        self.reset_buf[~cond] = 1
         if self.common_step_counter % 40 == 0:
             self.physics_sim_view.set_gravity(self.gravity_all_directions[self.gravity_id])
             self.gravity_id += 1
@@ -52,28 +72,68 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
 
         self._refresh_lab()
         success = self.episode_length_buf == self.max_episode_length - 1
-        all_states = torch.cat([self.hand_dof_pos, self.object_pos, self.object_rot], dim=1)[success]
-        saved_scale_ids = self.scale_ids[success]
+        all_states = torch.cat(
+            [self.hand_dof_pos, self.object_pos, self.object_rot], dim=1
+        )[success]
+        saved_scale_ids = self.scale_ids[success].squeeze(-1).long()
+        if self._grasp_angle_bins > 1 and len(all_states) > 0:
+            object_up_axis = torch.tensor(
+                self.cfg.object_up_axis, device=self.device, dtype=torch.float32
+            ).expand(len(all_states), -1)
+            object_up_axis = object_up_axis / torch.clamp(
+                torch.linalg.vector_norm(object_up_axis, dim=-1, keepdim=True),
+                min=1.0e-6,
+            )
+            object_up_w = quat_rotate(all_states[:, 25:29], object_up_axis)
+            target_axis_w = torch.tensor(
+                self.cfg.grasp_angle_target_axis_w,
+                device=self.device,
+                dtype=torch.float32,
+            )
+            target_axis_w = target_axis_w / torch.clamp(
+                torch.linalg.vector_norm(target_axis_w), min=1.0e-6
+            )
+            grasp_angles = torch.acos(
+                torch.clamp((object_up_w * target_axis_w).sum(dim=-1), -1.0, 1.0)
+            )
+            saved_angle_ids = torch.floor(
+                grasp_angles / torch.pi * self._grasp_angle_bins
+            ).long().clamp_max(self._grasp_angle_bins - 1)
+        else:
+            saved_angle_ids = torch.zeros_like(saved_scale_ids)
+        saved_bucket_ids = (
+            saved_scale_ids * self._grasp_angle_bins + saved_angle_ids
+        )
         max_cache_size = int(getattr(self.cfg, "grasp_cache_size", 50000))
-        max_cache_per_scale = max_cache_size // self.cfg.scale_range[2]
-        sum_total = 0
-        finish_scale = 0
-        for id, saved_scale_id in enumerate(saved_scale_ids):
-            if self.saved_grasping_states[saved_scale_id].shape[0] < max_cache_per_scale:
-                self.saved_grasping_states[saved_scale_id] = torch.cat(
-                    [self.saved_grasping_states[saved_scale_id], all_states[id].reshape(-1, 29)],
-                    dim=0,
-                )[:max_cache_per_scale]
-        for id, saved_grasping_states in enumerate(self.saved_grasping_states):
-            if saved_grasping_states.shape[0] >= max_cache_per_scale:
-                finish_scale += 1
-            sum_total += saved_grasping_states.shape[0]
-        print(f'[{time.strftime("%Y-%m-%d %H:%M:%S")}] current cache size: {sum_total}, finished: {finish_scale}')
-        if finish_scale == self.cfg.scale_range[2]:
+        num_cache_buckets = int(self.cfg.scale_range[2]) * self._grasp_angle_bins
+        max_cache_per_bucket = max_cache_size // num_cache_buckets
+        if max_cache_per_bucket <= 0:
+            raise ValueError(
+                f"grasp_cache_size={max_cache_size} is smaller than the "
+                f"{num_cache_buckets} scale/angle buckets."
+            )
+        for bucket_id in torch.unique(saved_bucket_ids).detach().cpu().tolist():
+            saved_grasping_states = self.saved_grasping_states[bucket_id]
+            remaining = max_cache_per_bucket - len(saved_grasping_states)
+            if remaining > 0:
+                candidates = all_states[saved_bucket_ids == bucket_id]
+                if len(candidates) > 0:
+                    self.saved_grasping_states[bucket_id] = torch.cat(
+                        [saved_grasping_states, candidates[:remaining]], dim=0
+                    )
+        bucket_sizes = [len(bucket) for bucket in self.saved_grasping_states]
+        finished_buckets = sum(
+            size >= max_cache_per_bucket for size in bucket_sizes
+        )
+        self._report_grasp_progress(
+            bucket_sizes=bucket_sizes,
+            max_cache_per_bucket=max_cache_per_bucket,
+            finished_buckets=finished_buckets,
+            force=finished_buckets == num_cache_buckets,
+        )
+        if finished_buckets == num_cache_buckets:
             print('done!')
-            save_data = torch.zeros((0, 29), dtype=torch.float32, device=self.device)
-            for saved_grasping_states in self.saved_grasping_states:
-                save_data = torch.cat([save_data, saved_grasping_states], dim=0)
+            save_data = torch.cat(self.saved_grasping_states, dim=0)
             os.makedirs('cache', exist_ok=True)
             cache_prefix = getattr(self.cfg, "save_grasp_cache_path", None) or self.cfg.grasp_cache_path or 'cache/sharpa_grasp_linspace'
             name = f'{cache_prefix}_{self.cfg.scale_range[0]}-{self.cfg.scale_range[1]}-{self.cfg.scale_range[2]}.npy'
@@ -130,6 +190,74 @@ class SharpaWaveInhandRotateGraspEnv(SharpaWaveInhandRotateEnv):
         self.last_contacts[env_ids] = 0
         self.proprio_hist_buf[env_ids] = 0
         self.at_reset_buf[env_ids] = 1
+
+    def _report_grasp_progress(
+        self,
+        bucket_sizes: list[int],
+        max_cache_per_bucket: int,
+        finished_buckets: int,
+        force: bool = False,
+    ) -> None:
+        """Print a throttled progress bar with collection rate and ETA."""
+        now = time.monotonic()
+        report_interval = float(self.cfg.grasp_progress_interval_s)
+        if not force and now - self._grasp_last_progress_time < report_interval:
+            return
+        self._grasp_last_progress_time = now
+
+        num_cache_buckets = len(bucket_sizes)
+        target_total = max_cache_per_bucket * num_cache_buckets
+        saved_total = sum(bucket_sizes)
+        progress = min(saved_total / target_total, 1.0)
+        bar_width = 24
+        filled_width = min(int(progress * bar_width), bar_width)
+        progress_bar = "#" * filled_width + "-" * (bar_width - filled_width)
+
+        elapsed = max(now - self._grasp_progress_start_time, 1.0e-6)
+        collection_rate = saved_total / elapsed
+        if collection_rate > 0.0:
+            eta_seconds = (target_total - saved_total) / collection_rate
+            eta_text = self._format_duration(eta_seconds)
+        else:
+            eta_text = "--"
+
+        num_scales = int(self.cfg.scale_range[2])
+        per_scale_target = max_cache_per_bucket * self._grasp_angle_bins
+        per_scale_sizes = [
+            sum(
+                bucket_sizes[
+                    scale_id
+                    * self._grasp_angle_bins : (scale_id + 1)
+                    * self._grasp_angle_bins
+                ]
+            )
+            for scale_id in range(num_scales)
+        ]
+        scale_text = ",".join(str(size) for size in per_scale_sizes)
+        min_bucket = min(bucket_sizes)
+        max_bucket = max(bucket_sizes)
+
+        print(
+            f'[{time.strftime("%Y-%m-%d %H:%M:%S")}] grasp cache '
+            f"[{progress_bar}] {saved_total}/{target_total} "
+            f"({100.0 * progress:5.1f}%) | "
+            f"buckets {finished_buckets}/{num_cache_buckets} | "
+            f"scales [{scale_text}]/{per_scale_target} | "
+            f"bucket min/max {min_bucket}/{max_bucket} | "
+            f"rate {collection_rate:.1f}/s | ETA {eta_text}",
+            flush=True,
+        )
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        seconds = max(int(seconds), 0)
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours > 0:
+            return f"{hours:d}h{minutes:02d}m"
+        if minutes > 0:
+            return f"{minutes:d}m{seconds:02d}s"
+        return f"{seconds:d}s"
 
 
 @torch.jit.script
